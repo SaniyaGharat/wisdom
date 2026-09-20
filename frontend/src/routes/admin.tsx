@@ -1,0 +1,3 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { AdminDashboard } from "@/components/admin-dashboard";
+export const Route = createFileRoute("/admin")({ head: () => ({ meta: [{ title: "Platform Analytics — Matchleaf" }, { name: "description", content: "Monitor marketplace matching activity, quality, and health." }, { property: "og:title", content: "Platform Analytics — Matchleaf" }, { property: "og:description", content: "Monitor marketplace matching activity, quality, and health." }, { property: "og:type", content: "website" }, { name: "twitter:card", content: "summary_large_image" }] }), component: AdminDashboard });

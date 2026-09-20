@@ -1,0 +1,3 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { ProfileForm } from "@/components/profile-form";
+export const Route = createFileRoute("/suppliers/new")({ head: () => ({ meta: [{ title: "New Supplier Profile — Matchleaf" }, { name: "description", content: "Share your supply capabilities and connect with suitable buyers." }, { property: "og:title", content: "New Supplier Profile — Matchleaf" }, { property: "og:description", content: "Share your supply capabilities and connect with suitable buyers." }, { property: "og:type", content: "website" }, { name: "twitter:card", content: "summary_large_image" }] }), component: () => <ProfileForm kind="supplier" /> });

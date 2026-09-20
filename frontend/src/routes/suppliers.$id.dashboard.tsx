@@ -1,0 +1,4 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { MatchDashboard } from "@/components/match-dashboard";
+export const Route = createFileRoute("/suppliers/$id/dashboard")({ head: () => ({ meta: [{ title: "Supplier Matches — Matchleaf" }, { name: "description", content: "Review and manage ranked buyer opportunities." }, { property: "og:title", content: "Supplier Matches — Matchleaf" }, { property: "og:description", content: "Review and manage ranked buyer opportunities." }, { property: "og:type", content: "website" }, { name: "twitter:card", content: "summary_large_image" }] }), component: Page });
+function Page() { const { id } = Route.useParams(); return <MatchDashboard kind="supplier" id={id} />; }
