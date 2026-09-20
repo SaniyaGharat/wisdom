@@ -9,6 +9,7 @@ from app.database import SessionLocal, engine, Base
 from app.models.client import Client
 from app.models.supplier import Supplier
 from app.models.match import Match
+from app.services.matching_engine import run_matching_all
 
 
 SAMPLE_CLIENTS = [
@@ -100,7 +101,7 @@ SAMPLE_SUPPLIERS = [
         "product_offered": "Turnkey Multilayer PCB Fabrication & High-Speed SMT Assembly",
         "category": "Electronics",
         "available_quantity": 20000,
-        "pricing_details": Decimal("7.80"),  # per unit
+        "pricing_details": Decimal("7.80"),  # per unit -> 5000 * 7.80 = 39000 <= 45000
         "location": "Dallas, TX, USA",
         "delivery_capability": "ships in 10-14 days",
         "additional_notes": "Equipped with automated optical inspection (AOI) and X-ray testing for BGA components.",
@@ -110,7 +111,7 @@ SAMPLE_SUPPLIERS = [
         "product_offered": "Custom Flexible AMOLED & OLED Displays with integrated touch controllers",
         "category": "Electronics",
         "available_quantity": 8000,
-        "pricing_details": Decimal("36.50"),  # per unit
+        "pricing_details": Decimal("36.50"),  # per unit -> 2000 * 36.50 = 73000 <= 80000
         "location": "San Jose, CA, USA",
         "delivery_capability": "ships in 14-21 days",
         "additional_notes": "Offers complete optical bonding and custom cover glass printing.",
@@ -120,7 +121,7 @@ SAMPLE_SUPPLIERS = [
         "product_offered": "GOTS Certified Organic Ring-Spun Cotton Fabrics & Custom Dyeing",
         "category": "Textiles",
         "available_quantity": 30000,
-        "pricing_details": Decimal("3.20"),  # per meter / roll unit
+        "pricing_details": Decimal("3.20"),  # per roll unit -> 10000 * 3.20 = 32000 <= 35000
         "location": "Greensboro, NC, USA",
         "delivery_capability": "ships in 7-10 days",
         "additional_notes": "OEKO-TEX Standard 100 certified, zero toxic wastewater discharge facility.",
@@ -130,7 +131,7 @@ SAMPLE_SUPPLIERS = [
         "product_offered": "Recycled Poly/Spandex Technical Knits for athletic and compression wear",
         "category": "Textiles",
         "available_quantity": 25000,
-        "pricing_details": Decimal("5.40"),  # per yard
+        "pricing_details": Decimal("5.40"),  # per unit -> 8000 * 5.40 = 43200 <= 48000
         "location": "Atlanta, GA, USA",
         "delivery_capability": "ships in 12-15 days",
         "additional_notes": "High colorfastness to chlorine, UV, and laundering.",
@@ -140,8 +141,8 @@ SAMPLE_SUPPLIERS = [
         "product_offered": "Certified Compostable PLA Mailers, Envelopes & Biodegradable Pouches",
         "category": "Packaging",
         "available_quantity": 100000,
-        "pricing_details": Decimal("0.38"),  # per mailer
-        "location": "Salt Lake City, UT, USA",
+        "pricing_details": Decimal("0.38"),  # per mailer -> 50000 * 0.38 = 19000 <= 22000
+        "location": "Denver, CO, USA",
         "delivery_capability": "ships in 5-7 business days",
         "additional_notes": "Custom flexographic printing up to 6 colors; tamper-evident adhesive strips.",
     },
@@ -150,8 +151,8 @@ SAMPLE_SUPPLIERS = [
         "product_offered": "Heavy-Duty Corrugated Shipping Boxes & Partition Inserts",
         "category": "Packaging",
         "available_quantity": 50000,
-        "pricing_details": Decimal("1.10"),  # per box
-        "location": "Milwaukee, WI, USA",
+        "pricing_details": Decimal("1.10"),  # per box -> 15000 * 1.10 = 16500 <= 18500
+        "location": "Chicago, IL, USA",
         "delivery_capability": "ships in 5-8 days",
         "additional_notes": "FSC-certified 100% recycled paperboard with moisture-resistant barrier.",
     },
@@ -160,7 +161,7 @@ SAMPLE_SUPPLIERS = [
         "product_offered": "Certified Aerospace Grade Aluminum 6061-T6 / 7075 Extrusion Billets",
         "category": "Raw Materials",
         "available_quantity": 40000,
-        "pricing_details": Decimal("7.25"),  # per kg / unit
+        "pricing_details": Decimal("7.25"),  # per unit -> 12000 * 7.25 = 87000 <= 95000
         "location": "Spokane, WA, USA",
         "delivery_capability": "ships in 14-20 days",
         "additional_notes": "AS9100D registered facility, full lot traceability and ultrasonic inspection reports included.",
@@ -170,7 +171,7 @@ SAMPLE_SUPPLIERS = [
         "product_offered": "Medical-Grade & Food-Contact USP Class VI Polypropylene Resin Pellets",
         "category": "Raw Materials",
         "available_quantity": 80000,
-        "pricing_details": Decimal("2.15"),  # per kg
+        "pricing_details": Decimal("2.15"),  # per unit -> 25000 * 2.15 = 53750 <= 62500
         "location": "Philadelphia, PA, USA",
         "delivery_capability": "ships in 7-12 days",
         "additional_notes": "ISO 13485 cleanroom compound manufacturing with DMF on file.",
@@ -178,8 +179,8 @@ SAMPLE_SUPPLIERS = [
 ]
 
 
-def seed_database():
-    """Seed the database with sample clients and suppliers."""
+def seed_database(run_matching: bool = True):
+    """Seed the database with sample clients and suppliers, then run matchmaking."""
     print("Initializing database tables...")
     Base.metadata.create_all(bind=engine)
 
@@ -190,10 +191,14 @@ def seed_database():
         existing_suppliers = db.query(Supplier).count()
 
         if existing_clients > 0 or existing_suppliers > 0:
-            print(f"Database already contains {existing_clients} clients and {existing_suppliers} suppliers.")
+            print(f"Database contains {existing_clients} clients and {existing_suppliers} suppliers.")
             user_input = os.getenv("FORCE_SEED", "false").lower()
             if user_input != "true":
-                print("Skipping seeding. (Set FORCE_SEED=true to wipe and re-seed)")
+                print("Skipping re-inserting client/supplier rows. (Set FORCE_SEED=true to wipe and re-seed)")
+                if run_matching:
+                    print("Running AI matchmaking engine on existing data...")
+                    match_summary = run_matching_all(db, min_score=40.0)
+                    print(f"Matchmaking complete: {match_summary['matches_stored']} matches stored.")
                 return
 
             print("FORCE_SEED=true detected. Clearing existing data...")
@@ -214,6 +219,11 @@ def seed_database():
 
         db.commit()
         print(f"Successfully seeded {len(SAMPLE_CLIENTS)} clients and {len(SAMPLE_SUPPLIERS)} suppliers!")
+
+        if run_matching:
+            print("Executing AI Matchmaking Engine across all seed data...")
+            match_summary = run_matching_all(db, min_score=40.0)
+            print(f"AI Matchmaking complete! Generated {match_summary['matches_stored']} high-quality matches.")
 
     except Exception as e:
         db.rollback()

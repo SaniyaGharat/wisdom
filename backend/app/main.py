@@ -3,7 +3,15 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.database import engine, Base
-from app.routers import health_router, clients_router, suppliers_router
+from app.routers import (
+    health_router,
+    clients_router,
+    suppliers_router,
+    matching_router,
+    matches_router,
+    notifications_router,
+    dashboard_router,
+)
 
 
 @asynccontextmanager
@@ -19,7 +27,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.VERSION,
-    description="Backend REST API for AI-Powered Client–Supplier Matchmaking Platform (Phase 1).",
+    description="Backend REST API for AI-Powered Client–Supplier Matchmaking Platform (Phase 3: Notifications & Dashboard).",
     openapi_url="/openapi.json",
     docs_url="/docs",
     redoc_url="/redoc",
@@ -39,6 +47,10 @@ app.add_middleware(
 app.include_router(health_router, prefix=settings.API_V1_STR)
 app.include_router(clients_router, prefix=settings.API_V1_STR)
 app.include_router(suppliers_router, prefix=settings.API_V1_STR)
+app.include_router(matching_router, prefix=settings.API_V1_STR)
+app.include_router(matches_router, prefix=settings.API_V1_STR)
+app.include_router(notifications_router, prefix=settings.API_V1_STR)
+app.include_router(dashboard_router, prefix=settings.API_V1_STR)
 
 
 @app.get("/", tags=["Root"], summary="Root status")
