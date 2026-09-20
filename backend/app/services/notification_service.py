@@ -18,6 +18,11 @@ from app.models.notification import Notification
 from app.crud.notification import create_notification
 
 
+import logging
+
+logger = logging.getLogger("app.notification_service")
+
+
 class BaseNotificationProvider(ABC):
     """Abstract base class for notification delivery channels."""
 
@@ -47,13 +52,18 @@ class DatabaseNotificationProvider(BaseNotificationProvider):
         message: str,
         match_id: Optional[uuid.UUID] = None,
     ) -> Notification:
-        return create_notification(
+        notif = create_notification(
             db=db,
             recipient_type=recipient_type,
             recipient_id=recipient_id,
             match_id=match_id,
             message=message,
         )
+        logger.info(
+            f"Notification dispatched [DB]: id={notif.id} recipient_type={recipient_type} "
+            f"recipient_id={recipient_id} match_id={match_id}"
+        )
+        return notif
 
 
 # Active notification providers registry
@@ -120,4 +130,10 @@ def notify_match(db: Session, match: Match) -> Tuple[Notification, Notification]
         db.commit()
         db.refresh(match)
 
+    logger.info(
+        f"Match notification cycle completed: match_id={match.id} "
+        f"client_id={client.id} supplier_id={supplier.id} score={match.match_score}"
+    )
+
     return client_notif, supplier_notif
+

@@ -7,39 +7,44 @@ from app.schemas.supplier import SupplierResponse
 
 
 class MatchScoreBreakdown(BaseModel):
-    semantic_score: float = Field(..., description="Semantic AI embedding similarity (0.0 to 1.0)")
-    category_score: float = Field(..., description="Exact category alignment (0.0 or 1.0)")
-    location_score: float = Field(..., description="Location proximity (0.0 to 1.0)")
-    quantity_score: float = Field(..., description="Capacity / quantity feasibility (0.0 to 1.0)")
-    budget_score: float = Field(..., description="Budget feasibility (0.0 to 1.0)")
-    delivery_score: float = Field(..., description="Delivery timeline feasibility (0.0 to 1.0)")
+    semantic_score: float = Field(..., examples=[0.82], description="Semantic AI embedding similarity (0.0 to 1.0)")
+    category_score: float = Field(..., examples=[1.0], description="Exact category alignment (0.0 or 1.0)")
+    location_score: float = Field(..., examples=[0.5], description="Location proximity (0.0 to 1.0)")
+    quantity_score: float = Field(..., examples=[1.0], description="Capacity / quantity feasibility (0.0 to 1.0)")
+    budget_score: float = Field(..., examples=[1.0], description="Budget feasibility (0.0 to 1.0)")
+    delivery_score: float = Field(..., examples=[1.0], description="Delivery timeline feasibility (0.0 to 1.0)")
 
 
 class MatchBase(BaseModel):
-    client_id: uuid.UUID
-    supplier_id: uuid.UUID
-    match_score: float = Field(..., ge=0.0, le=100.0, description="Overall weighted match score (0 to 100)")
-    semantic_score: Optional[float] = Field(None, ge=0.0, le=1.0)
-    category_score: Optional[float] = Field(None, ge=0.0, le=1.0)
-    location_score: Optional[float] = Field(None, ge=0.0, le=1.0)
-    quantity_score: Optional[float] = Field(None, ge=0.0, le=1.0)
-    budget_score: Optional[float] = Field(None, ge=0.0, le=1.0)
-    delivery_score: Optional[float] = Field(None, ge=0.0, le=1.0)
-    match_reason: Optional[str] = Field(None, description="Human-readable justification for the match score")
-    status: str = Field("pending", description="Match status: pending / notified / accepted / rejected")
+    client_id: uuid.UUID = Field(..., examples=["4c01d4a0-5c62-43bb-bf58-48b0a9967733"])
+    supplier_id: uuid.UUID = Field(..., examples=["8f12a34b-7c89-49de-81a2-3b4c5d6e7f80"])
+    match_score: float = Field(..., ge=0.0, le=100.0, examples=[86.39], description="Overall weighted match score (0 to 100)")
+    semantic_score: Optional[float] = Field(None, ge=0.0, le=1.0, examples=[0.8254])
+    category_score: Optional[float] = Field(None, ge=0.0, le=1.0, examples=[1.0])
+    location_score: Optional[float] = Field(None, ge=0.0, le=1.0, examples=[0.5])
+    quantity_score: Optional[float] = Field(None, ge=0.0, le=1.0, examples=[1.0])
+    budget_score: Optional[float] = Field(None, ge=0.0, le=1.0, examples=[1.0])
+    delivery_score: Optional[float] = Field(None, ge=0.0, le=1.0, examples=[1.0])
+    match_reason: Optional[str] = Field(
+        None,
+        examples=["Strong semantic alignment on product requirement (82%). Exact category match ('Raw Materials'). Within budget. Regional location alignment."],
+        description="Human-readable justification for the match score",
+    )
+    status: str = Field("notified", examples=["notified"], description="Match status: pending / notified / accepted / rejected")
 
 
 class MatchStatusUpdate(BaseModel):
     status: Literal["pending", "notified", "accepted", "rejected"] = Field(
         ...,
+        examples=["accepted"],
         description="New status for the match record",
     )
 
 
 class MatchResponse(MatchBase):
-    id: uuid.UUID
-    created_at: datetime
-    updated_at: datetime
+    id: uuid.UUID = Field(..., examples=["d86f9c4b-3336-474d-8a75-c296651fa544"])
+    created_at: datetime = Field(..., examples=["2026-09-20T10:00:00Z"])
+    updated_at: datetime = Field(..., examples=["2026-09-20T10:00:00Z"])
     client: Optional[ClientResponse] = None
     supplier: Optional[SupplierResponse] = None
 
@@ -47,8 +52,8 @@ class MatchResponse(MatchBase):
 
 
 class BatchMatchingResponse(BaseModel):
-    message: str
-    clients_processed: int
-    suppliers_evaluated: int
-    matches_stored: int
-    min_score_threshold: float
+    message: str = Field(..., examples=["Batch matchmaking completed successfully"])
+    clients_processed: int = Field(..., examples=[8])
+    suppliers_evaluated: int = Field(..., examples=[8])
+    matches_stored: int = Field(..., examples=[45])
+    min_score_threshold: float = Field(..., examples=[40.0])

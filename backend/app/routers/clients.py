@@ -19,12 +19,14 @@ router = APIRouter(prefix="/clients", tags=["Clients"])
     response_model=ClientResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Create a client requirement",
+    description="Submit a new B2B product procurement requirement with quantity, budget, category, location, and timeline constraints.",
+    response_description="The newly created client requirement record.",
 )
 def create_client(
     client_in: ClientCreate,
     db: Session = Depends(get_db),
 ):
-    """Create a new client product requirement."""
+    """Create a new client requirement."""
     return crud_client.create_client(db=db, obj_in=client_in)
 
 
@@ -32,15 +34,17 @@ def create_client(
     "",
     response_model=PaginatedResponse[ClientResponse],
     summary="List clients with filters and pagination",
+    description="Retrieve a paginated list of client procurement requirements. Supports case-insensitive category and location search filters.",
+    response_description="Paginated envelope with items, total count, limit, offset, and has_more flag.",
 )
 def list_clients(
-    limit: int = Query(20, ge=1, le=100, description="Number of results per page"),
-    offset: int = Query(0, ge=0, description="Offset index for pagination"),
+    limit: int = Query(20, ge=1, le=100, description="Page size limit (maximum 100)"),
+    offset: int = Query(0, ge=0, description="Pagination offset index"),
     category: Optional[str] = Query(None, description="Filter by category (case-insensitive substring)"),
     location: Optional[str] = Query(None, description="Filter by location (case-insensitive substring)"),
     db: Session = Depends(get_db),
 ):
-    """List all clients with optional filtering by category/location and pagination."""
+    """List all clients with pagination and filters."""
     items, total = crud_client.get_clients(
         db=db,
         limit=limit,
@@ -48,11 +52,11 @@ def list_clients(
         category=category,
         location=location,
     )
-    return PaginatedResponse[ClientResponse](
+    return PaginatedResponse[ClientResponse].create(
+        items=items,
         total=total,
         limit=limit,
         offset=offset,
-        items=items,
     )
 
 
@@ -60,6 +64,8 @@ def list_clients(
     "/{client_id}",
     response_model=ClientResponse,
     summary="Get a single client requirement",
+    description="Retrieve full specification details of a specific client requirement by UUID.",
+    response_description="Client requirement record.",
 )
 def get_client(
     client_id: uuid.UUID,
@@ -79,6 +85,8 @@ def get_client(
     "/{client_id}",
     response_model=ClientResponse,
     summary="Update a client requirement",
+    description="Update fields on an existing client requirement. Non-provided fields remain unchanged.",
+    response_description="The updated client requirement record.",
 )
 def update_client(
     client_id: uuid.UUID,
@@ -99,6 +107,8 @@ def update_client(
     "/{client_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete a client requirement",
+    description="Delete an existing client requirement and cascade-delete any associated match records.",
+    response_description="No content upon successful deletion.",
 )
 def delete_client(
     client_id: uuid.UUID,

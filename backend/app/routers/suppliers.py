@@ -19,6 +19,8 @@ router = APIRouter(prefix="/suppliers", tags=["Suppliers"])
     response_model=SupplierResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Create a supplier profile/offering",
+    description="Register a new supplier capability profile with product offerings, available supply capacity, unit pricing, location, and delivery turnaround SLAs.",
+    response_description="The newly created supplier profile.",
 )
 def create_supplier(
     supplier_in: SupplierCreate,
@@ -32,15 +34,17 @@ def create_supplier(
     "",
     response_model=PaginatedResponse[SupplierResponse],
     summary="List suppliers with filters and pagination",
+    description="Retrieve a paginated list of supplier offerings. Supports filtering by category and location.",
+    response_description="Paginated envelope with items, total count, limit, offset, and has_more flag.",
 )
 def list_suppliers(
-    limit: int = Query(20, ge=1, le=100, description="Number of results per page"),
-    offset: int = Query(0, ge=0, description="Offset index for pagination"),
+    limit: int = Query(20, ge=1, le=100, description="Page size limit (maximum 100)"),
+    offset: int = Query(0, ge=0, description="Pagination offset index"),
     category: Optional[str] = Query(None, description="Filter by category (case-insensitive substring)"),
     location: Optional[str] = Query(None, description="Filter by location (case-insensitive substring)"),
     db: Session = Depends(get_db),
 ):
-    """List all suppliers with optional filtering by category/location and pagination."""
+    """List all suppliers with pagination and filters."""
     items, total = crud_supplier.get_suppliers(
         db=db,
         limit=limit,
@@ -48,11 +52,11 @@ def list_suppliers(
         category=category,
         location=location,
     )
-    return PaginatedResponse[SupplierResponse](
+    return PaginatedResponse[SupplierResponse].create(
+        items=items,
         total=total,
         limit=limit,
         offset=offset,
-        items=items,
     )
 
 
@@ -60,6 +64,8 @@ def list_suppliers(
     "/{supplier_id}",
     response_model=SupplierResponse,
     summary="Get a single supplier offering",
+    description="Retrieve detailed specifications and capabilities of a specific supplier by UUID.",
+    response_description="Supplier capability record.",
 )
 def get_supplier(
     supplier_id: uuid.UUID,
@@ -79,6 +85,8 @@ def get_supplier(
     "/{supplier_id}",
     response_model=SupplierResponse,
     summary="Update a supplier offering",
+    description="Update capacity, pricing, delivery capability, or descriptions for an existing supplier.",
+    response_description="The updated supplier profile.",
 )
 def update_supplier(
     supplier_id: uuid.UUID,
@@ -99,6 +107,8 @@ def update_supplier(
     "/{supplier_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete a supplier offering",
+    description="Delete an existing supplier profile and cascade-delete any associated match records.",
+    response_description="No content upon successful deletion.",
 )
 def delete_supplier(
     supplier_id: uuid.UUID,

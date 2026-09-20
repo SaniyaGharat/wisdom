@@ -2,7 +2,74 @@
 
 Welcome to the **AI-Powered Client–Supplier Matchmaking Platform**.
 
-This platform pairs B2B client requirements with qualified supplier offerings by combining dense **transformer-based semantic similarity** with multi-attribute **deterministic business rule scoring**, automated **in-app notifications**, and **dashboard aggregation APIs**.
+This platform pairs B2B client requirements with qualified supplier offerings by combining dense **transformer-based semantic similarity** with multi-attribute **deterministic business rule scoring**, automated **in-app notifications**, **dashboard aggregation APIs**, and a hardened, developer-friendly REST API.
+
+---
+
+## 📐 API Conventions & Response Standards (Phase 4)
+
+All API endpoints follow strict, consistent response structures designed for frontend integration (e.g. React, Next.js, Lovable, Bolt.new).
+
+### 1. Consistent Pagination Envelope
+All listing endpoints (`/api/clients`, `/api/suppliers`, `/api/matches`, `/api/notifications`) return a standardized paginated envelope:
+
+```json
+{
+  "items": [ ... ],
+  "total": 128,
+  "limit": 20,
+  "offset": 0,
+  "has_more": true
+}
+```
+
+- **`limit` cap**: Minimum `1`, maximum `100`. Requests with `limit > 100` are rejected with `422 Unprocessable Entity`.
+- **`offset`**: 0-indexed starting position.
+- **`has_more`**: Boolean flag calculated as `(offset + items.length) < total`, simplifying infinite scroll and pagination UI controls.
+
+---
+
+### 2. Standard Error Response Shape
+All error responses (400, 404, 422, 500) return a uniform error object:
+
+```json
+{
+  "error": "Validation Error",
+  "detail": "Request payload or query parameter validation failed",
+  "status_code": 422,
+  "errors": [
+    {
+      "field": "quantity_required",
+      "message": "Input should be greater than 0",
+      "type": "greater_than"
+    },
+    {
+      "field": "budget",
+      "message": "Input should be greater than or equal to 0",
+      "type": "greater_than_equal"
+    }
+  ]
+}
+```
+
+- **404 Not Found**: Triggered when a requested UUID entity (`client_id`, `supplier_id`, `match_id`, `notification_id`) does not exist.
+- **422 Unprocessable Entity**: Triggered on invalid query parameters or request body fields with granular, field-level diagnostics.
+- **500 Internal Server Error**: Catches unhandled server exceptions, logs full stack traces server-side, and returns a safe JSON error payload without leaking internal tracebacks.
+
+---
+
+### 3. Diagnostic Health Check (`GET /api/health`)
+Returns real-time status of both database connectivity and the SentenceTransformers AI model:
+
+```json
+{
+  "status": "ok",
+  "version": "4.0.0",
+  "environment": "development",
+  "database": "connected",
+  "embedding_model": "loaded"
+}
+```
 
 ---
 
@@ -111,15 +178,6 @@ The service uses a **Provider Pattern** (`BaseNotificationProvider` in `app/serv
 }
 ```
 
-#### 3. Unread Notification Count: `GET /api/notifications/unread-count?recipient_type=client&recipient_id={client_id}`
-```json
-{
-  "recipient_type": "client",
-  "recipient_id": "ae6838e4-5002-4be9-bfd6-7aef7efe6838",
-  "unread_count": 3
-}
-```
-
 ---
 
 ## 🛠 Tech Stack
@@ -141,7 +199,7 @@ The service uses a **Provider Pattern** (`BaseNotificationProvider` in `app/serv
 ```
 backend/
 ├── app/
-│   ├── main.py                  # FastAPI application with CORS, routes & docs
+│   ├── main.py                  # FastAPI app with global error handlers & OpenAPI config
 │   ├── config.py                # Environment & Matching weights configuration
 │   ├── database.py              # SQLAlchemy 2.0 engine, Base & session dependency
 │   ├── models/
@@ -155,7 +213,7 @@ backend/
 │   │   ├── match.py             # Match schemas
 │   │   ├── notification.py      # Notification schemas
 │   │   ├── dashboard.py         # Dashboard aggregation schemas
-│   │   └── common.py            # PaginatedResponse & HealthResponse schemas
+│   │   └── common.py            # PaginatedResponse, HealthResponse & ErrorResponse schemas
 │   ├── crud/
 │   │   ├── client.py            # Client CRUD operations
 │   │   ├── supplier.py          # Supplier CRUD operations
@@ -166,12 +224,12 @@ backend/
 │   │   ├── matching_engine.py   # Hybrid AI matching engine & embedding cache
 │   │   └── notification_service.py # Provider-based notification dispatcher
 │   ├── routers/
-│   │   ├── health.py            # GET /api/health
-│   │   ├── clients.py           # CRUD /api/clients
-│   │   ├── suppliers.py         # CRUD /api/suppliers
+│   │   ├── health.py            # GET /api/health (DB & AI model diagnostics)
+│   │   ├── clients.py           # CRUD /api/clients (PaginatedResponse)
+│   │   ├── suppliers.py         # CRUD /api/suppliers (PaginatedResponse)
 │   │   ├── matching.py          # POST /api/matching/run/{id} & /run-all
-│   │   ├── matches.py           # GET /api/matches & PATCH status
-│   │   ├── notifications.py     # GET /api/notifications, PATCH read
+│   │   ├── matches.py           # GET /api/matches & PATCH status (PaginatedResponse)
+│   │   ├── notifications.py     # GET /api/notifications (PaginatedResponse), PATCH read
 │   │   └── dashboard.py         # GET /api/dashboard summary & views
 │   └── seed/
 │       └── seed_data.py         # Database seeding script with auto-matchmaking
@@ -182,6 +240,7 @@ backend/
 ├── tests/
 │   ├── conftest.py              # Pytest fixtures (SQLite in-memory test DB)
 │   ├── test_health.py           # Health check tests
+│   ├── test_api_hardening.py    # Pagination envelope, 404, 422 & limit cap tests
 │   ├── test_clients.py          # Client CRUD & validation tests
 │   ├── test_suppliers.py        # Supplier CRUD & validation tests
 │   ├── test_matching_engine.py  # AI semantic & business rule unit tests

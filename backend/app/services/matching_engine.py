@@ -398,6 +398,12 @@ def compute_match(client: Client, supplier: Supplier) -> Dict[str, Any]:
 from app.services.notification_service import notify_match
 
 
+import time
+import logging
+
+logger = logging.getLogger("app.matching_engine")
+
+
 def run_matching_for_client(
     db: Session,
     client_id: Any,
@@ -409,8 +415,10 @@ def run_matching_for_client(
     Automatically notifies client & supplier if a new match is created.
     Returns ranked list of stored matches.
     """
+    start_time = time.perf_counter()
     client = get_client(db, client_id)
     if not client:
+        logger.warning(f"Matching run failed: Client with id {client_id} not found")
         raise ValueError(f"Client with id {client_id} not found")
 
     threshold = min_score if min_score is not None else settings.MATCH_MIN_SCORE_THRESHOLD
@@ -434,6 +442,12 @@ def run_matching_for_client(
 
     # Sort descending by match_score
     stored_matches.sort(key=lambda m: (m.match_score or 0.0), reverse=True)
+    duration_ms = (time.perf_counter() - start_time) * 1000
+    logger.info(
+        f"Matching run completed for client_id={client_id}: "
+        f"{len(stored_matches)} matches found across {len(suppliers)} suppliers "
+        f"in {duration_ms:.2f}ms (threshold={threshold})"
+    )
     return stored_matches
 
 
@@ -448,8 +462,10 @@ def run_matching_for_supplier(
     Automatically notifies client & supplier if a new match is created.
     Returns ranked list of stored matches.
     """
+    start_time = time.perf_counter()
     supplier = get_supplier(db, supplier_id)
     if not supplier:
+        logger.warning(f"Matching run failed: Supplier with id {supplier_id} not found")
         raise ValueError(f"Supplier with id {supplier_id} not found")
 
     threshold = min_score if min_score is not None else settings.MATCH_MIN_SCORE_THRESHOLD
@@ -471,6 +487,12 @@ def run_matching_for_supplier(
             stored_matches.append(match_record)
 
     stored_matches.sort(key=lambda m: (m.match_score or 0.0), reverse=True)
+    duration_ms = (time.perf_counter() - start_time) * 1000
+    logger.info(
+        f"Matching run completed for supplier_id={supplier_id}: "
+        f"{len(stored_matches)} matches found across {len(clients)} clients "
+        f"in {duration_ms:.2f}ms (threshold={threshold})"
+    )
     return stored_matches
 
 
@@ -483,6 +505,7 @@ def run_matching_all(
     Automatically notifies client & supplier for any newly created qualifying match.
     Returns summary metrics.
     """
+    start_time = time.perf_counter()
     threshold = min_score if min_score is not None else settings.MATCH_MIN_SCORE_THRESHOLD
     clients, _ = get_clients(db, limit=1000, offset=0)
     suppliers, _ = get_suppliers(db, limit=1000, offset=0)
@@ -506,6 +529,13 @@ def run_matching_all(
 
                 matches_count += 1
 
+    duration_ms = (time.perf_counter() - start_time) * 1000
+    logger.info(
+        f"Batch matching run completed: {len(clients)} clients, {len(suppliers)} suppliers, "
+        f"{matches_count} qualifying matches, {new_notifications_count} notifications created "
+        f"in {duration_ms:.2f}ms"
+    )
+
     return {
         "message": "Batch matchmaking completed successfully",
         "clients_processed": len(clients),
@@ -514,3 +544,4 @@ def run_matching_all(
         "new_notifications_created": new_notifications_count,
         "min_score_threshold": threshold,
     }
+

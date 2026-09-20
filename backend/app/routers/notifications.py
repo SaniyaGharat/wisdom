@@ -41,11 +41,11 @@ def list_notifications(
         recipient_id=recipient_id,
         is_read=is_read,
     )
-    return PaginatedResponse[NotificationResponse](
+    return PaginatedResponse.create(
+        items=items,
         total=total,
         limit=limit,
         offset=offset,
-        items=items,
     )
 
 

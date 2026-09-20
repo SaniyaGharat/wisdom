@@ -15,14 +15,16 @@ router = APIRouter(prefix="/matches", tags=["Matches"])
     "",
     response_model=PaginatedResponse[MatchResponse],
     summary="List stored matches with filtering, pagination and ranking",
+    description="Retrieve all matches stored by the AI matching engine, ordered descending by match_score. Filterable by client_id, supplier_id, status, and minimum score threshold.",
+    response_description="Paginated envelope with matching pairs, score breakdowns, and justifications.",
 )
 def list_matches(
-    limit: int = Query(20, ge=1, le=100, description="Results per page"),
-    offset: int = Query(0, ge=0, description="Pagination offset"),
+    limit: int = Query(20, ge=1, le=100, description="Results per page (maximum 100)"),
+    offset: int = Query(0, ge=0, description="Pagination offset index"),
     client_id: Optional[uuid.UUID] = Query(None, description="Filter by client UUID"),
     supplier_id: Optional[uuid.UUID] = Query(None, description="Filter by supplier UUID"),
-    status: Optional[str] = Query(None, description="Filter by match status (pending/accepted/rejected)"),
-    min_score: Optional[float] = Query(None, ge=0.0, le=100.0, description="Minimum match score filter"),
+    status: Optional[str] = Query(None, description="Filter by match status ('pending', 'notified', 'accepted', 'rejected')"),
+    min_score: Optional[float] = Query(None, ge=0.0, le=100.0, description="Minimum match score threshold (0-100)"),
     db: Session = Depends(get_db),
 ):
     """
@@ -37,11 +39,11 @@ def list_matches(
         status=status,
         min_score=min_score,
     )
-    return PaginatedResponse[MatchResponse](
+    return PaginatedResponse[MatchResponse].create(
+        items=items,
         total=total,
         limit=limit,
         offset=offset,
-        items=items,
     )
 
 
@@ -49,6 +51,8 @@ def list_matches(
     "/{match_id}",
     response_model=MatchResponse,
     summary="Get match details with full score breakdown",
+    description="Retrieve full multi-attribute score breakdown (semantic, category, location, quantity, budget, delivery) and plain-English justification for a match.",
+    response_description="Detailed match record with populated client and supplier profiles.",
 )
 def get_match(
     match_id: uuid.UUID,
@@ -69,7 +73,9 @@ def get_match(
 @router.patch(
     "/{match_id}/status",
     response_model=MatchResponse,
-    summary="Update match status (e.g. pending -> accepted / rejected)",
+    summary="Update match status",
+    description="Update workflow status for a match record (e.g. advance from 'notified' to 'accepted' or 'rejected'). Re-scoring will not overwrite manual status changes.",
+    response_description="The updated match record.",
 )
 def update_match_status(
     match_id: uuid.UUID,

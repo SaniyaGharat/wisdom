@@ -15,6 +15,8 @@ router = APIRouter(prefix="/matching", tags=["AI Matching Engine"])
     response_model=List[MatchResponse],
     status_code=status.HTTP_200_OK,
     summary="Trigger AI matching for a specific client",
+    description="Run the hybrid AI matching engine (semantic embeddings + business rules) for a client against all suppliers. Upserts matches above threshold and returns them ranked by score.",
+    response_description="List of calculated matches ranked by composite match score",
 )
 def match_client(
     client_id: uuid.UUID,
@@ -40,6 +42,8 @@ def match_client(
     response_model=BatchMatchingResponse,
     status_code=status.HTTP_200_OK,
     summary="Trigger batch AI matching across all clients and suppliers",
+    description="Execute full batch AI matching across the entire client-supplier universe. In high-scale deployments, this operation should be offloaded to background task queues (e.g. Celery / ARQ).",
+    response_description="Summary of batch execution including processed count, match count, notifications created, and execution duration",
 )
 def match_all(
     min_score: Optional[float] = Query(None, ge=0.0, le=100.0, description="Optional minimum match score filter (0-100)"),
@@ -51,3 +55,4 @@ def match_all(
     """
     result = run_matching_all(db=db, min_score=min_score)
     return BatchMatchingResponse(**result)
+

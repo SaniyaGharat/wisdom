@@ -10,7 +10,7 @@ from app.schemas.dashboard import (
     ActivityItemResponse,
     RecentActivityResponse,
 )
-from app.schemas.common import PaginatedResponse, HealthResponse
+from app.schemas.common import PaginatedResponse, HealthResponse, ErrorResponse, ValidationErrorItem
 
 __all__ = [
     "ClientBase",
@@ -39,4 +39,6 @@ __all__ = [
     "RecentActivityResponse",
     "PaginatedResponse",
     "HealthResponse",
+    "ErrorResponse",
+    "ValidationErrorItem",
 ]

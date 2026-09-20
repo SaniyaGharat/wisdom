@@ -21,6 +21,8 @@ router = APIRouter(prefix="/dashboard", tags=["Dashboard Aggregations"])
     "/summary",
     response_model=DashboardSummaryResponse,
     summary="Get high-level matchmaking platform summary metrics",
+    description="Returns aggregate platform-wide statistics, total registered clients and suppliers, match volume, accepted rate, and average score.",
+    response_description="Platform overview KPIs and match status counts",
 )
 def get_summary(db: Session = Depends(get_db)):
     """
@@ -33,6 +35,8 @@ def get_summary(db: Session = Depends(get_db)):
     "/clients/{client_id}",
     response_model=ClientDashboardResponse,
     summary="Get client-scoped dashboard view",
+    description="Returns client requirements, top ranked supplier matches, match count by status, and unread notification alerts.",
+    response_description="Client profile and dedicated matching pipeline view",
 )
 def get_client_dashboard(
     client_id: uuid.UUID,
@@ -54,6 +58,8 @@ def get_client_dashboard(
     "/suppliers/{supplier_id}",
     response_model=SupplierDashboardResponse,
     summary="Get supplier-scoped dashboard view",
+    description="Returns supplier capabilities, incoming client match leads ranked by score, status breakdown, and unread alerts.",
+    response_description="Supplier profile and incoming business opportunity leads",
 )
 def get_supplier_dashboard(
     supplier_id: uuid.UUID,
@@ -75,6 +81,8 @@ def get_supplier_dashboard(
     "/category-breakdown",
     response_model=List[CategoryBreakdownItem],
     summary="Get metrics and averages grouped by category",
+    description="Provides market segment analytics by industry category: client demand, supplier supply, match volume, and average score.",
+    response_description="Array of category distribution metrics",
 )
 def get_category_breakdown(db: Session = Depends(get_db)):
     """
@@ -87,9 +95,11 @@ def get_category_breakdown(db: Session = Depends(get_db)):
     "/recent-activity",
     response_model=RecentActivityResponse,
     summary="Get unified platform activity feed",
+    description="Unified chronologically sorted event stream capturing new client/supplier registrations, AI matching runs, and notifications.",
+    response_description="Paginated list of recent platform activity items",
 )
 def get_recent_activity(
-    limit: int = Query(20, ge=1, le=100, description="Number of recent activity items"),
+    limit: int = Query(20, ge=1, le=100, description="Number of recent activity items (max 100)"),
     db: Session = Depends(get_db),
 ):
     """
@@ -101,3 +111,4 @@ def get_recent_activity(
         total_items=len(items),
         items=[ActivityItemResponse(**item) for item in items],
     )
+
