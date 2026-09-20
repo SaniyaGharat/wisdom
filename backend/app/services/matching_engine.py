@@ -144,7 +144,7 @@ def score_location(client: Client, supplier: Supplier) -> float:
     """
     Location proximity scoring:
     - 1.0: Same city / exact location match
-    - 0.5: Same broader region / state / country
+    - 0.5: Same broader region / state
     - 0.0: No recognized geographic overlap
     """
     if not client.location or not supplier.location:
@@ -160,16 +160,21 @@ def score_location(client: Client, supplier: Supplier) -> float:
     c_parts = [t.strip() for t in re.split(r"[,/\-]+", c_loc) if t.strip()]
     s_parts = [t.strip() for t in re.split(r"[,/\-]+", s_loc) if t.strip()]
 
+    if not c_parts or not s_parts:
+        return 0.0
+
     # Check for city match (first token)
-    c_city = c_parts[0] if c_parts else ""
-    s_city = s_parts[0] if s_parts else ""
+    c_city = c_parts[0]
+    s_city = s_parts[0]
     if c_city and s_city and c_city == s_city:
         return 1.0
 
-    # Check for shared state or country tokens (e.g. 'tx', 'ca', 'usa', 'india', 'germany')
-    c_set = set(c_parts)
-    s_set = set(s_parts)
-    if c_set.intersection(s_set):
+    # Exclude common national suffixes so country name alone doesn't trigger state/region match
+    common_countries = {"india", "usa", "us", "united states", "uk", "germany", "france", "china", "japan"}
+    c_regions = {p for p in c_parts[1:] if p not in common_countries}
+    s_regions = {p for p in s_parts[1:] if p not in common_countries}
+
+    if c_regions and s_regions and c_regions.intersection(s_regions):
         return 0.5
 
     return 0.0
@@ -315,10 +320,10 @@ def generate_match_reason(
     total_cost = float(supplier.pricing_details) * client.quantity_required
     client_budget = float(client.budget)
     if budget_score == 1.0:
-        reasons.append(f"within budget (${total_cost:,.2f} <= ${client_budget:,.2f})")
+        reasons.append(f"within budget (₹{total_cost:,.2f} <= ₹{client_budget:,.2f})")
     else:
         overage = total_cost - client_budget
-        reasons.append(f"exceeds budget by ${overage:,.2f}")
+        reasons.append(f"exceeds budget by ₹{overage:,.2f}")
 
     # Quantity
     if quantity_score == 1.0:

@@ -27,7 +27,7 @@ def test_semantic_similarity_differentiation():
         category="Electronics",
         quantity_required=1000,
         budget=Decimal("10000.00"),
-        location="Austin, TX",
+        location="Bengaluru, Karnataka, India",
         delivery_timeline="within 2 weeks",
     )
 
@@ -38,7 +38,7 @@ def test_semantic_similarity_differentiation():
         category="Electronics",
         available_quantity=5000,
         pricing_details=Decimal("8.50"),
-        location="Dallas, TX",
+        location="Chennai, Tamil Nadu, India",
         delivery_capability="ships in 10 days",
     )
 
@@ -49,7 +49,7 @@ def test_semantic_similarity_differentiation():
         category="Textiles",
         available_quantity=20000,
         pricing_details=Decimal("3.00"),
-        location="Greensboro, NC",
+        location="Coimbatore, Tamil Nadu, India",
         delivery_capability="ships in 7 days",
     )
 
@@ -69,7 +69,7 @@ def test_category_scoring():
         category="Electronics",
         quantity_required=10,
         budget=Decimal("100"),
-        location="Austin, TX",
+        location="Pune, Maharashtra, India",
         delivery_timeline="1 week",
     )
 
@@ -80,7 +80,7 @@ def test_category_scoring():
         category="electronics",
         available_quantity=10,
         pricing_details=Decimal("5"),
-        location="Austin, TX",
+        location="Pune, Maharashtra, India",
         delivery_capability="1 week",
     )
 
@@ -91,7 +91,7 @@ def test_category_scoring():
         category="Packaging",
         available_quantity=10,
         pricing_details=Decimal("5"),
-        location="Austin, TX",
+        location="Mumbai, Maharashtra, India",
         delivery_capability="1 week",
     )
 
@@ -107,7 +107,7 @@ def test_location_scoring():
         category="General",
         quantity_required=10,
         budget=Decimal("100"),
-        location="Austin, TX",
+        location="Mumbai, Maharashtra, India",
         delivery_timeline="1 week",
     )
 
@@ -118,7 +118,7 @@ def test_location_scoring():
         category="General",
         available_quantity=10,
         pricing_details=Decimal("5"),
-        location="Austin, TX, USA",
+        location="Mumbai, Maharashtra, India",
         delivery_capability="1 week",
     )
 
@@ -129,7 +129,7 @@ def test_location_scoring():
         category="General",
         available_quantity=10,
         pricing_details=Decimal("5"),
-        location="Dallas, TX",
+        location="Pune, Maharashtra, India",
         delivery_capability="1 week",
     )
 
@@ -140,7 +140,7 @@ def test_location_scoring():
         category="General",
         available_quantity=10,
         pricing_details=Decimal("5"),
-        location="London, UK",
+        location="Bengaluru, Karnataka, India",
         delivery_capability="1 week",
     )
 
@@ -157,7 +157,7 @@ def test_quantity_scoring():
         category="General",
         quantity_required=1000,
         budget=Decimal("1000"),
-        location="Austin, TX",
+        location="Hyderabad, Telangana, India",
         delivery_timeline="1 week",
     )
 
@@ -168,7 +168,7 @@ def test_quantity_scoring():
         category="General",
         available_quantity=2000,
         pricing_details=Decimal("1"),
-        location="Austin, TX",
+        location="Hyderabad, Telangana, India",
         delivery_capability="1 week",
     )
 
@@ -179,7 +179,7 @@ def test_quantity_scoring():
         category="General",
         available_quantity=500,
         pricing_details=Decimal("1"),
-        location="Austin, TX",
+        location="Ahmedabad, Gujarat, India",
         delivery_capability="1 week",
     )
 
@@ -195,7 +195,7 @@ def test_budget_scoring():
         category="General",
         quantity_required=100,
         budget=Decimal("1000.00"),
-        location="Austin, TX",
+        location="New Delhi, Delhi, India",
         delivery_timeline="1 week",
     )
 
@@ -206,7 +206,7 @@ def test_budget_scoring():
         category="General",
         available_quantity=200,
         pricing_details=Decimal("8.00"),  # total = 800 <= 1000
-        location="Austin, TX",
+        location="New Delhi, Delhi, India",
         delivery_capability="1 week",
     )
 
@@ -217,7 +217,7 @@ def test_budget_scoring():
         category="General",
         available_quantity=200,
         pricing_details=Decimal("12.00"),  # total = 1200 (20% over 1000)
-        location="Austin, TX",
+        location="Jaipur, Rajasthan, India",
         delivery_capability="1 week",
     )
 
@@ -238,7 +238,7 @@ def test_timeline_parser_and_delivery_scoring():
         category="General",
         quantity_required=10,
         budget=Decimal("100"),
-        location="Austin, TX",
+        location="Mumbai, Maharashtra, India",
         delivery_timeline="within 2 weeks",  # 14 days
     )
 
@@ -249,7 +249,7 @@ def test_timeline_parser_and_delivery_scoring():
         category="General",
         available_quantity=10,
         pricing_details=Decimal("1"),
-        location="Austin, TX",
+        location="Mumbai, Maharashtra, India",
         delivery_capability="ships in 5 days",  # 5 days <= 14
     )
 
@@ -260,7 +260,7 @@ def test_timeline_parser_and_delivery_scoring():
         category="General",
         available_quantity=10,
         pricing_details=Decimal("1"),
-        location="Austin, TX",
+        location="Surat, Gujarat, India",
         delivery_capability="ships in 40 days",  # 40 days > 14 * 1.5
     )
 
@@ -276,7 +276,7 @@ def test_compute_match_output_structure():
         category="Electronics",
         quantity_required=5000,
         budget=Decimal("45000.00"),
-        location="Austin, TX",
+        location="Bengaluru, Karnataka, India",
         delivery_timeline="within 3 weeks",
     )
 
@@ -287,16 +287,16 @@ def test_compute_match_output_structure():
         category="Electronics",
         available_quantity=20000,
         pricing_details=Decimal("7.80"),
-        location="Dallas, TX",
+        location="Pune, Maharashtra, India",
         delivery_capability="ships in 10-14 days",
     )
 
     result = compute_match(client, supplier)
     assert "match_score" in result
     assert 0.0 <= result["match_score"] <= 100.0
-    assert result["match_score"] >= 75.0  # High alignment on PCB & Electronics
+    assert result["match_score"] >= 70.0  # High alignment on PCB & Electronics
     assert result["category_score"] == 1.0
-    assert result["location_score"] == 0.5
+    assert result["location_score"] == 0.0
     assert result["quantity_score"] == 1.0
     assert result["budget_score"] == 1.0
     assert result["delivery_score"] == 1.0
@@ -311,7 +311,7 @@ def test_run_matching_for_client_db_integration(db_session):
         category="Raw Materials",
         quantity_required=1000,
         budget=Decimal("5000.00"),
-        location="Boston, MA",
+        location="Chennai, Tamil Nadu, India",
         delivery_timeline="within 3 weeks",
     )
     db_session.add(client)
@@ -323,7 +323,7 @@ def test_run_matching_for_client_db_integration(db_session):
         category="Raw Materials",
         available_quantity=5000,
         pricing_details=Decimal("2.50"),
-        location="Philadelphia, PA",
+        location="Coimbatore, Tamil Nadu, India",
         delivery_capability="ships in 10 days",
     )
     db_session.add(good_supplier)
