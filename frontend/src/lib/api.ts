@@ -99,6 +99,15 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+export type CategoryBreakdownItem = {
+  category: string;
+  total_clients?: number;
+  total_suppliers?: number;
+  total_matches?: number;
+  average_match_score?: number;
+  [key: string]: unknown;
+};
+
 export const api = {
   getSummary: () => request<DashboardSummary>("/api/dashboard/summary"),
   getHealth: () => request<{ status: string }>("/api/health"),
@@ -116,7 +125,7 @@ export const api = {
   getNotifications: () => request<ListEnvelope<Notification>>("/api/notifications"),
   getUnreadCount: () => request<{ unread_count?: number; count?: number }>("/api/notifications/unread-count"),
   markNotificationRead: (id: string | number) => request<unknown>(`/api/notifications/${id}/read`, { method: "PATCH" }),
-  getCategoryBreakdown: () => request<ListEnvelope<Record<string, unknown>> | Record<string, number>>("/api/dashboard/category-breakdown"),
+  getCategoryBreakdown: () => request<CategoryBreakdownItem[] | ListEnvelope<CategoryBreakdownItem> | Record<string, number>>("/api/dashboard/category-breakdown"),
   getRecentActivity: () => request<ListEnvelope<Record<string, unknown>>>("/api/dashboard/recent-activity"),
   getMatches: (params: URLSearchParams) => request<ListEnvelope<Match>>(`/api/matches?${params.toString()}`),
 };
