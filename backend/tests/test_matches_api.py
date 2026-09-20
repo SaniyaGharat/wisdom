@@ -94,3 +94,61 @@ def test_batch_matching_api(client):
     assert "clients_processed" in batch_data
     assert "suppliers_evaluated" in batch_data
     assert "matches_stored" in batch_data
+
+
+def test_rescore_preserves_manually_set_status(client):
+    """
+    Verify that creating a match, updating its status to 'accepted', and then
+    re-running matching for the same client NEVER overwrites status back to 'notified' or 'pending'.
+    """
+    # 1. Create client and supplier
+    c_res = client.post(
+        "/api/clients",
+        json={
+            "company_name": "AeroForge Dynamics",
+            "product_requirement": "Aerospace Grade 6061-T6 Aluminum Billets",
+            "category": "Raw Materials",
+            "quantity_required": 12000,
+            "budget": 95000.00,
+            "location": "Seattle, WA",
+            "delivery_timeline": "within 4 weeks",
+        },
+    )
+    assert c_res.status_code == 201
+    client_id = c_res.json()["id"]
+
+    s_res = client.post(
+        "/api/suppliers",
+        json={
+            "supplier_name": "Titanium & Alloy Works",
+            "product_offered": "Certified Aerospace Grade Aluminum 6061-T6 Billets",
+            "category": "Raw Materials",
+            "available_quantity": 40000,
+            "pricing_details": 7.25,
+            "location": "Spokane, WA",
+            "delivery_capability": "ships in 14-20 days",
+        },
+    )
+    assert s_res.status_code == 201
+
+    # 2. Run matching -> match created with status="notified"
+    run_res_1 = client.post(f"/api/matching/run/{client_id}")
+    assert run_res_1.status_code == 200
+    matches_1 = run_res_1.json()
+    assert len(matches_1) >= 1
+    match_id = matches_1[0]["id"]
+    assert matches_1[0]["status"] == "notified"
+
+    # 3. PATCH status to 'accepted'
+    patch_res = client.patch(f"/api/matches/{match_id}/status", json={"status": "accepted"})
+    assert patch_res.status_code == 200
+    assert patch_res.json()["status"] == "accepted"
+
+    # 4. Re-run matching for the same client
+    run_res_2 = client.post(f"/api/matching/run/{client_id}")
+    assert run_res_2.status_code == 200
+
+    # 5. Assert the match's status is STILL 'accepted'
+    get_res = client.get(f"/api/matches/{match_id}")
+    assert get_res.status_code == 200
+    assert get_res.json()["status"] == "accepted"

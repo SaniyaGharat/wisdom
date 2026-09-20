@@ -78,6 +78,8 @@ def upsert_match(
 
     if existing:
         for field, value in match_data.items():
+            if field == "status":
+                continue
             if hasattr(existing, field):
                 setattr(existing, field, value)
         db_obj = existing

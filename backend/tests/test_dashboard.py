@@ -1,92 +1,218 @@
 import uuid
+import pytest
 
 
-def test_dashboard_summary_and_aggregations(client):
-    # 1. Create client and supplier
-    c_res = client.post(
+@pytest.fixture
+def populated_dashboard_data(client):
+    """
+    Seed a known set of clients and suppliers across 2 distinct categories (Electronics and Packaging),
+    and trigger matching so dashboard aggregation metrics can be deterministically tested.
+    """
+    # 1. Create 2 Clients
+    c1 = client.post(
         "/api/clients",
         json={
-            "company_name": "EcoThread Apparel Co.",
-            "product_requirement": "100% Organic Cotton Fabric Rolls",
-            "category": "Textiles",
-            "quantity_required": 10000,
-            "budget": 35000.00,
-            "location": "Portland, OR",
-            "delivery_timeline": "within 2 weeks",
+            "company_name": "Apex IoT Innovations",
+            "product_requirement": "Custom Printed Circuit Boards",
+            "category": "Electronics",
+            "quantity_required": 5000,
+            "budget": 45000.00,
+            "location": "Austin, TX",
+            "delivery_timeline": "within 3 weeks",
         },
-    )
-    assert c_res.status_code == 201
-    client_id = c_res.json()["id"]
+    ).json()
 
-    s_res = client.post(
+    c2 = client.post(
+        "/api/clients",
+        json={
+            "company_name": "PurePack Organics",
+            "product_requirement": "Compostable PLA Shipping Mailers",
+            "category": "Packaging",
+            "quantity_required": 50000,
+            "budget": 22000.00,
+            "location": "Denver, CO",
+            "delivery_timeline": "within 10 days",
+        },
+    ).json()
+
+    # 2. Create 2 Suppliers
+    s1 = client.post(
         "/api/suppliers",
         json={
-            "supplier_name": "Verde Mills & Weaving",
-            "product_offered": "GOTS Certified Organic Cotton Fabrics",
-            "category": "Textiles",
-            "available_quantity": 30000,
-            "pricing_details": 3.20,
-            "location": "Greensboro, NC",
-            "delivery_capability": "ships in 7-10 days",
+            "supplier_name": "CircuitCraft Microelectronics",
+            "product_offered": "Turnkey Multilayer PCB Fabrication",
+            "category": "Electronics",
+            "available_quantity": 20000,
+            "pricing_details": 7.80,
+            "location": "Dallas, TX",
+            "delivery_capability": "ships in 10-14 days",
         },
-    )
-    assert s_res.status_code == 201
-    supplier_id = s_res.json()["id"]
+    ).json()
 
-    # Trigger matching
-    match_run = client.post(f"/api/matching/run/{client_id}")
-    assert match_run.status_code == 200
+    s2 = client.post(
+        "/api/suppliers",
+        json={
+            "supplier_name": "BioShield Packaging Group",
+            "product_offered": "Certified Compostable PLA Mailers",
+            "category": "Packaging",
+            "available_quantity": 100000,
+            "pricing_details": 0.38,
+            "location": "Denver, CO",
+            "delivery_capability": "ships in 5-7 days",
+        },
+    ).json()
 
-    # 2. Test GET /api/dashboard/summary
-    summary_res = client.get("/api/dashboard/summary")
-    assert summary_res.status_code == 200
-    summary = summary_res.json()
-    assert summary["total_clients"] >= 1
-    assert summary["total_suppliers"] >= 1
-    assert summary["total_matches"] >= 1
-    assert "matches_by_status" in summary
-    assert "notified" in summary["matches_by_status"] or "pending" in summary["matches_by_status"]
-    assert summary["average_match_score"] > 0.0
-    assert summary["matches_above_threshold_count"] >= 1
+    # 3. Trigger batch matching
+    batch_res = client.post("/api/matching/run-all?min_score=30.0")
+    assert batch_res.status_code == 200
 
-    # 3. Test GET /api/dashboard/clients/{client_id}
-    client_dash = client.get(f"/api/dashboard/clients/{client_id}")
-    assert client_dash.status_code == 200
-    c_dash_data = client_dash.json()
-    assert c_dash_data["client"]["id"] == client_id
-    assert c_dash_data["total_matches_count"] >= 1
-    assert len(c_dash_data["matches"]) >= 1
-    assert c_dash_data["unread_notifications_count"] >= 1
+    return {
+        "client_electronics": c1,
+        "client_packaging": c2,
+        "supplier_electronics": s1,
+        "supplier_packaging": s2,
+    }
 
-    # 4. Test GET /api/dashboard/suppliers/{supplier_id}
-    supplier_dash = client.get(f"/api/dashboard/suppliers/{supplier_id}")
-    assert supplier_dash.status_code == 200
-    s_dash_data = supplier_dash.json()
-    assert s_dash_data["supplier"]["id"] == supplier_id
-    assert s_dash_data["total_matches_count"] >= 1
-    assert s_dash_data["unread_notifications_count"] >= 1
 
-    # 5. Test 404 for non-existent client/supplier dashboards
-    random_id = str(uuid.uuid4())
-    assert client.get(f"/api/dashboard/clients/{random_id}").status_code == 404
-    assert client.get(f"/api/dashboard/suppliers/{random_id}").status_code == 404
+def test_dashboard_summary_endpoint(client, populated_dashboard_data):
+    """
+    Verify GET /api/dashboard/summary calculates exact mathematical totals and metrics.
+    """
+    res = client.get("/api/dashboard/summary")
+    assert res.status_code == 200
+    data = res.json()
 
-    # 6. Test GET /api/dashboard/category-breakdown
-    cat_res = client.get("/api/dashboard/category-breakdown")
-    assert cat_res.status_code == 200
-    cats = cat_res.json()
-    assert isinstance(cats, list)
-    textile_cat = next((c for c in cats if c["category"] == "Textiles"), None)
-    assert textile_cat is not None
-    assert textile_cat["total_clients"] >= 1
-    assert textile_cat["total_suppliers"] >= 1
-    assert textile_cat["total_matches"] >= 1
-    assert textile_cat["average_match_score"] > 50.0
+    # Total clients and suppliers created in fixture
+    assert data["total_clients"] >= 2
+    assert data["total_suppliers"] >= 2
+    assert data["total_matches"] >= 2
 
-    # 7. Test GET /api/dashboard/recent-activity
-    act_res = client.get("/api/dashboard/recent-activity?limit=10")
-    assert act_res.status_code == 200
-    activity = act_res.json()
-    assert activity["total_items"] >= 1
-    types = [item["type"] for item in activity["items"]]
-    assert any(t in types for t in ["client_created", "supplier_created", "match_created", "notification_sent"])
+    # Status distribution
+    assert isinstance(data["matches_by_status"], dict)
+    assert "notified" in data["matches_by_status"]
+    assert "pending" in data["matches_by_status"]
+    assert "accepted" in data["matches_by_status"]
+    assert "rejected" in data["matches_by_status"]
+
+    # All new matches generated by matching_engine are auto-notified
+    assert data["matches_by_status"]["notified"] >= 2
+
+    # Average match score calculation
+    assert 0.0 < data["average_match_score"] <= 100.0
+    assert data["matches_above_threshold_count"] >= 2
+
+
+def test_dashboard_client_view_endpoint(client, populated_dashboard_data):
+    """
+    Verify GET /api/dashboard/clients/{client_id} returns client-specific matches & unread count.
+    """
+    c_pkg = populated_dashboard_data["client_packaging"]
+    c_id = c_pkg["id"]
+
+    res = client.get(f"/api/dashboard/clients/{c_id}")
+    assert res.status_code == 200
+    data = res.json()
+
+    # Client metadata
+    assert data["client"]["id"] == c_id
+    assert data["client"]["company_name"] == "PurePack Organics"
+    assert data["client"]["category"] == "Packaging"
+
+    # Matches list
+    assert data["total_matches_count"] >= 1
+    assert len(data["matches"]) == data["total_matches_count"]
+    top_match = data["matches"][0]
+    assert top_match["client_id"] == c_id
+    assert top_match["supplier"]["supplier_name"] == "BioShield Packaging Group"
+    assert top_match["match_score"] >= 80.0
+    assert top_match["category_score"] == 1.0
+
+    # Unread notifications
+    assert data["unread_notifications_count"] >= 1
+
+    # Verify 404 for non-existent client
+    fake_id = str(uuid.uuid4())
+    assert client.get(f"/api/dashboard/clients/{fake_id}").status_code == 404
+
+
+def test_dashboard_supplier_view_endpoint(client, populated_dashboard_data):
+    """
+    Verify GET /api/dashboard/suppliers/{supplier_id} returns supplier-specific matches & unread count.
+    """
+    s_elec = populated_dashboard_data["supplier_electronics"]
+    s_id = s_elec["id"]
+
+    res = client.get(f"/api/dashboard/suppliers/{s_id}")
+    assert res.status_code == 200
+    data = res.json()
+
+    # Supplier metadata
+    assert data["supplier"]["id"] == s_id
+    assert data["supplier"]["supplier_name"] == "CircuitCraft Microelectronics"
+    assert data["supplier"]["category"] == "Electronics"
+
+    # Matches list
+    assert data["total_matches_count"] >= 1
+    top_match = data["matches"][0]
+    assert top_match["supplier_id"] == s_id
+    assert top_match["client"]["company_name"] == "Apex IoT Innovations"
+    assert top_match["match_score"] >= 70.0
+
+    # Unread notifications
+    assert data["unread_notifications_count"] >= 1
+
+    # Verify 404 for non-existent supplier
+    fake_id = str(uuid.uuid4())
+    assert client.get(f"/api/dashboard/suppliers/{fake_id}").status_code == 404
+
+
+def test_dashboard_category_breakdown_endpoint(client, populated_dashboard_data):
+    """
+    Verify GET /api/dashboard/category-breakdown aggregates correctly per category.
+    """
+    res = client.get("/api/dashboard/category-breakdown")
+    assert res.status_code == 200
+    categories = res.json()
+    assert isinstance(categories, list)
+
+    cat_map = {item["category"]: item for item in categories}
+    assert "Electronics" in cat_map
+    assert "Packaging" in cat_map
+
+    # Check Electronics breakdown
+    elec = cat_map["Electronics"]
+    assert elec["total_clients"] >= 1
+    assert elec["total_suppliers"] >= 1
+    assert elec["total_matches"] >= 1
+    assert elec["average_match_score"] >= 50.0
+
+    # Check Packaging breakdown
+    pkg = cat_map["Packaging"]
+    assert pkg["total_clients"] >= 1
+    assert pkg["total_suppliers"] >= 1
+    assert pkg["total_matches"] >= 1
+    assert pkg["average_match_score"] >= 50.0
+
+
+def test_dashboard_recent_activity_endpoint(client, populated_dashboard_data):
+    """
+    Verify GET /api/dashboard/recent-activity returns unified chronologically ordered items.
+    """
+    res = client.get("/api/dashboard/recent-activity?limit=15")
+    assert res.status_code == 200
+    data = res.json()
+
+    assert data["total_items"] >= 4
+    items = data["items"]
+    assert len(items) <= 15
+
+    # Verify chronological ordering: timestamp_0 >= timestamp_1 >= ...
+    for i in range(len(items) - 1):
+        assert items[i]["timestamp"] >= items[i + 1]["timestamp"]
+
+    # Verify activity types presence
+    item_types = {item["type"] for item in items}
+    assert "client_created" in item_types
+    assert "supplier_created" in item_types
+    assert "match_created" in item_types
+    assert "notification_sent" in item_types
