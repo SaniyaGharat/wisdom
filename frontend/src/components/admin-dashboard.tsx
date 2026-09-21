@@ -269,27 +269,27 @@ export function AdminDashboard() {
               </div>
 
               {/* Table */}
-              <div className="overflow-x-auto">
-                <table className="data-table text-sm">
-                  <thead>
+              <div className="overflow-hidden rounded-lg border border-border bg-card">
+                <table className="w-full border-collapse text-left text-xs sm:text-sm">
+                  <thead className="border-b border-border bg-muted/60 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                     <tr>
-                      <th>Band</th>
-                      <th>Total</th>
-                      <th>Accepted</th>
-                      <th>Rejected</th>
-                      <th>Pending</th>
-                      <th>Rate</th>
+                      <th className="py-2.5 px-3">Band</th>
+                      <th className="py-2.5 px-1.5 text-center">Total</th>
+                      <th className="py-2.5 px-1.5 text-center">Accepted</th>
+                      <th className="py-2.5 px-1.5 text-center">Rejected</th>
+                      <th className="py-2.5 px-1.5 text-center">Pending</th>
+                      <th className="py-2.5 px-3 text-right">Rate</th>
                     </tr>
                   </thead>
                   <tbody>
                     {scoreEffectiveness.data.map((b) => (
-                      <tr key={b.band}>
-                        <td className="font-semibold">{b.band}</td>
-                        <td>{b.total_matches}</td>
-                        <td>{b.accepted_count}</td>
-                        <td>{b.rejected_count}</td>
-                        <td>{b.pending_count}</td>
-                        <td className="font-semibold">
+                      <tr key={b.band} className="border-b border-border/50 last:border-b-0 hover:bg-muted/30 transition-colors">
+                        <td className="py-2 px-3 font-semibold">{b.band}</td>
+                        <td className="py-2 px-1.5 text-center text-muted-foreground">{b.total_matches}</td>
+                        <td className="py-2 px-1.5 text-center font-medium text-emerald-600 dark:text-emerald-400">{b.accepted_count}</td>
+                        <td className="py-2 px-1.5 text-center font-medium text-rose-600 dark:text-rose-400">{b.rejected_count}</td>
+                        <td className="py-2 px-1.5 text-center text-muted-foreground">{b.pending_count}</td>
+                        <td className="py-2 px-3 text-right font-bold">
                           {b.acceptance_rate !== null
                             ? `${(b.acceptance_rate * 100).toFixed(1)}%`
                             : <span className="text-muted-foreground">—</span>}
