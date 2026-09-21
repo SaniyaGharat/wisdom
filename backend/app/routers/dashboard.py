@@ -12,6 +12,8 @@ from app.schemas.dashboard import (
     CategoryBreakdownItem,
     RecentActivityResponse,
     ActivityItemResponse,
+    ScoreTrendItem,
+    ScoreBandEffectiveness,
 )
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard Aggregations"])
@@ -111,4 +113,36 @@ def get_recent_activity(
         total_items=len(items),
         items=[ActivityItemResponse(**item) for item in items],
     )
+
+
+@router.get(
+    "/score-trend",
+    response_model=List[ScoreTrendItem],
+    summary="Get daily average match score trend",
+    description="Returns average match score and match volume grouped by day for the last N days.",
+    response_description="Chronological series of daily match score averages and counts",
+)
+def get_score_trend(
+    days: int = Query(30, ge=1, le=365, description="Number of days to look back"),
+    db: Session = Depends(get_db),
+):
+    """
+    Returns daily aggregated average match score and match counts for admin charts.
+    """
+    return crud_dashboard.get_score_trend(db=db, days=days)
+
+
+@router.get(
+    "/score-effectiveness",
+    response_model=List[ScoreBandEffectiveness],
+    summary="Get acceptance rate analysis grouped by score bands",
+    description="Analyzes match quality by calculating acceptance rate per score band, validating correlation with user decisions.",
+    response_description="Score bands with total matches, accepted/rejected/pending counts, and acceptance rate",
+)
+def get_score_effectiveness(db: Session = Depends(get_db)):
+    """
+    Validates model quality by calculating acceptance rate (accepted / (accepted + rejected))
+    across descending match score bands.
+    """
+    return crud_dashboard.get_score_effectiveness(db=db)
 

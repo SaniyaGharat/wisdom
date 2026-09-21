@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, List, Optional
 from sqlalchemy import select, func, distinct
 from sqlalchemy.orm import Session, joinedload
@@ -236,3 +237,115 @@ def get_recent_activity(db: Session, limit: int = 20) -> List[Dict[str, Any]]:
     # Sort all activities by timestamp descending
     activities.sort(key=lambda a: a["timestamp"], reverse=True)
     return activities[:limit]
+
+
+def get_score_trend(db: Session, days: int = 30) -> List[Dict[str, Any]]:
+    """
+    Calculate daily average match score and match volume for the past N days.
+    """
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    
+    rows = db.execute(
+        select(Match.match_score, Match.created_at)
+        .where(Match.created_at >= cutoff)
+        .order_by(Match.created_at.asc())
+    ).all()
+    
+    grouped: Dict[str, List[float]] = {}
+    for score, created_at in rows:
+        if created_at is None or score is None:
+            continue
+        day_str = created_at.strftime("%Y-%m-%d")
+        grouped.setdefault(day_str, []).append(float(score))
+        
+    result = []
+    for day_str in sorted(grouped.keys()):
+        scores = grouped[day_str]
+        result.append({
+            "date": day_str,
+            "average_score": round(sum(scores) / len(scores), 2),
+            "match_count": len(scores),
+        })
+    return result
+
+
+def get_score_effectiveness(db: Session) -> List[Dict[str, Any]]:
+    """
+    Analyze match quality by bucketing matches into score bands and calculating
+    the empirical acceptance rate (accepted / (accepted + rejected)), excluding pending.
+    Returns null for acceptance_rate if a band has zero decided matches.
+    """
+    band_definitions = [
+        {"band": "90-100", "min_score": 90.0, "max_score": 100.0},
+        {"band": "80-89", "min_score": 80.0, "max_score": 89.99},
+        {"band": "70-79", "min_score": 70.0, "max_score": 79.99},
+        {"band": "60-69", "min_score": 60.0, "max_score": 69.99},
+        {"band": "50-59", "min_score": 50.0, "max_score": 59.99},
+        {"band": "40-49", "min_score": 40.0, "max_score": 49.99},
+    ]
+
+    # Initialize counters for each band
+    bands_data = []
+    for b in band_definitions:
+        bands_data.append({
+            "band": b["band"],
+            "min_score": b["min_score"],
+            "max_score": b["max_score"],
+            "total_matches": 0,
+            "accepted_count": 0,
+            "rejected_count": 0,
+            "pending_count": 0,
+        })
+
+    all_matches = db.execute(select(Match.match_score, Match.status)).all()
+
+    for score_val, status_val in all_matches:
+        if score_val is None:
+            continue
+        score = float(score_val)
+
+        # Classify into corresponding score band
+        target_band = None
+        if score >= 90.0:
+            target_band = bands_data[0]
+        elif score >= 80.0:
+            target_band = bands_data[1]
+        elif score >= 70.0:
+            target_band = bands_data[2]
+        elif score >= 60.0:
+            target_band = bands_data[3]
+        elif score >= 50.0:
+            target_band = bands_data[4]
+        elif score >= 40.0:
+            target_band = bands_data[5]
+
+        if target_band is not None:
+            target_band["total_matches"] += 1
+            st = (status_val or "pending").strip().lower()
+            if st == "accepted":
+                target_band["accepted_count"] += 1
+            elif st == "rejected":
+                target_band["rejected_count"] += 1
+            else:
+                target_band["pending_count"] += 1
+
+    results = []
+    for b in bands_data:
+        decided = b["accepted_count"] + b["rejected_count"]
+        if decided == 0:
+            rate = None
+        else:
+            rate = round(b["accepted_count"] / decided, 4)
+
+        results.append({
+            "band": b["band"],
+            "min_score": b["min_score"],
+            "max_score": b["max_score"],
+            "total_matches": b["total_matches"],
+            "accepted_count": b["accepted_count"],
+            "rejected_count": b["rejected_count"],
+            "pending_count": b["pending_count"],
+            "acceptance_rate": rate,
+        })
+
+    return results

@@ -110,6 +110,23 @@ export type CategoryBreakdownItem = {
   [key: string]: unknown;
 };
 
+export type ScoreTrendItem = {
+  date: string;
+  average_score: number;
+  match_count: number;
+};
+
+export type ScoreBandEffectiveness = {
+  band: string;
+  min_score: number;
+  max_score: number;
+  total_matches: number;
+  accepted_count: number;
+  rejected_count: number;
+  pending_count: number;
+  acceptance_rate: number | null;
+};
+
 export const api = {
   getSummary: () => request<DashboardSummary>("/api/dashboard/summary"),
   getHealth: () => request<{ status: string }>("/api/health"),
@@ -130,6 +147,18 @@ export const api = {
   getCategoryBreakdown: () => request<CategoryBreakdownItem[] | ListEnvelope<CategoryBreakdownItem> | Record<string, number>>("/api/dashboard/category-breakdown"),
   getRecentActivity: () => request<ListEnvelope<Record<string, unknown>>>("/api/dashboard/recent-activity"),
   getMatches: (params: URLSearchParams) => request<ListEnvelope<Match>>(`/api/matches?${params.toString()}`),
+  getScoreTrend: (days = 30) => request<ScoreTrendItem[]>(`/api/dashboard/score-trend?days=${days}`),
+  getScoreEffectiveness: () => request<ScoreBandEffectiveness[]>("/api/dashboard/score-effectiveness"),
+  exportMatchesCsv: (params?: URLSearchParams) => {
+    const query = params ? `?${params.toString()}` : "";
+    const url = `${API_BASE_URL}/api/matches/export${query}`;
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "matches_export.csv";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  },
 };
 
 export function entityId(value: Record<string, unknown>): string | undefined {

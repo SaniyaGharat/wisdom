@@ -216,3 +216,116 @@ def test_dashboard_recent_activity_endpoint(client, populated_dashboard_data):
     assert "supplier_created" in item_types
     assert "match_created" in item_types
     assert "notification_sent" in item_types
+
+
+def test_dashboard_score_trend_endpoint(client, populated_dashboard_data):
+    """
+    Verify GET /api/dashboard/score-trend groups matches by day and computes average score.
+    """
+    res = client.get("/api/dashboard/score-trend?days=30")
+    assert res.status_code == 200
+    data = res.json()
+    assert isinstance(data, list)
+    assert len(data) >= 1
+
+    for item in data:
+        assert "date" in item
+        assert len(item["date"]) == 10  # YYYY-MM-DD
+        assert "average_score" in item
+        assert 0.0 <= item["average_score"] <= 100.0
+        assert "match_count" in item
+        assert item["match_count"] >= 1
+
+
+def test_dashboard_score_effectiveness_endpoint(client, populated_dashboard_data):
+    """
+    Verify GET /api/dashboard/score-effectiveness groups by score bands and calculates
+    acceptance_rate = accepted / (accepted + rejected).
+    """
+    # 1. Fetch existing matches to manipulate statuses
+    matches_res = client.get("/api/matches?limit=10")
+    assert matches_res.status_code == 200
+    items = matches_res.json()["items"]
+    assert len(items) >= 2
+
+    # Update one to accepted and one to rejected
+    m1_id = items[0]["id"]
+    m2_id = items[1]["id"]
+    client.patch(f"/api/matches/{m1_id}/status", json={"status": "accepted"})
+    client.patch(f"/api/matches/{m2_id}/status", json={"status": "rejected"})
+
+    # 2. Call score-effectiveness endpoint
+    res = client.get("/api/dashboard/score-effectiveness")
+    assert res.status_code == 200
+    bands = res.json()
+    assert isinstance(bands, list)
+    assert len(bands) == 6
+
+    expected_band_names = ["90-100", "80-89", "70-79", "60-69", "50-59", "40-49"]
+    actual_names = [b["band"] for b in bands]
+    assert actual_names == expected_band_names
+
+    # Verify counts and rate math across all bands
+    total_matches_sum = 0
+    decided_found = False
+
+    for b in bands:
+        assert b["total_matches"] == b["accepted_count"] + b["rejected_count"] + b["pending_count"]
+        total_matches_sum += b["total_matches"]
+
+        decided = b["accepted_count"] + b["rejected_count"]
+        if decided == 0:
+            # Undecided bands must have null acceptance_rate
+            assert b["acceptance_rate"] is None
+        else:
+            decided_found = True
+            expected_rate = round(b["accepted_count"] / decided, 4)
+            assert b["acceptance_rate"] == expected_rate
+
+    assert total_matches_sum >= 2
+    assert decided_found, "At least one band should contain the decided matches"
+
+
+def test_dashboard_score_effectiveness_zero_decided_edge_case(client):
+    """
+    Verify GET /api/dashboard/score-effectiveness returns acceptance_rate as null
+    when all matches are pending/notified (zero decided matches), avoiding ZeroDivisionError.
+    """
+    # Create 1 client & supplier and run match without accepting/rejecting
+    c = client.post(
+        "/api/clients",
+        json={
+            "company_name": "Zero Decided Client",
+            "product_requirement": "Custom Fasteners",
+            "category": "Fasteners",
+            "quantity_required": 1000,
+            "budget": 5000.0,
+            "location": "Boston, MA",
+            "delivery_timeline": "1 week",
+        },
+    ).json()
+
+    s = client.post(
+        "/api/suppliers",
+        json={
+            "supplier_name": "Zero Decided Supplier",
+            "product_offered": "Industrial Grade Fasteners & Bolts",
+            "category": "Fasteners",
+            "available_quantity": 5000,
+            "pricing_details": 2.0,
+            "location": "Boston, MA",
+            "delivery_capability": "ships in 3 days",
+        },
+    ).json()
+
+    client.post(f"/api/matching/run/{c['id']}")
+
+    res = client.get("/api/dashboard/score-effectiveness")
+    assert res.status_code == 200
+    bands = res.json()
+
+    # All bands must return acceptance_rate as None (null in JSON), no 500 crash
+    for b in bands:
+        assert b["accepted_count"] == 0
+        assert b["rejected_count"] == 0
+        assert b["acceptance_rate"] is None

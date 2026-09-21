@@ -55,3 +55,24 @@ class ActivityItemResponse(BaseModel):
 class RecentActivityResponse(BaseModel):
     total_items: int = Field(..., examples=[15], description="Total activities in feed")
     items: List[ActivityItemResponse]
+
+
+class ScoreTrendItem(BaseModel):
+    date: str = Field(..., examples=["2026-09-15"], description="Date in YYYY-MM-DD format")
+    average_score: float = Field(..., examples=[62.4], description="Average match score for this date")
+    match_count: int = Field(..., examples=[8], description="Total matches recorded on this date")
+
+
+class ScoreBandEffectiveness(BaseModel):
+    band: str = Field(..., examples=["90-100"], description="Score band label")
+    min_score: float = Field(..., examples=[90.0], description="Minimum score in this band")
+    max_score: float = Field(..., examples=[100.0], description="Maximum score in this band")
+    total_matches: int = Field(..., examples=[10], description="Total matches falling into this band")
+    accepted_count: int = Field(..., examples=[8], description="Accepted matches count")
+    rejected_count: int = Field(..., examples=[1], description="Rejected/declined matches count")
+    pending_count: int = Field(..., examples=[1], description="Pending or notified matches count")
+    acceptance_rate: Optional[float] = Field(
+        None,
+        examples=[0.8889],
+        description="accepted / (accepted + rejected), or null if no decided matches",
+    )

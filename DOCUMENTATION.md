@@ -191,6 +191,26 @@ $$\begin{aligned}
 3. **In-Memory Embedding Cache**: Embeddings are computed with an in-process LRU cache. In a distributed multi-worker configuration, cache misses would duplicate embedding computation.
    - *Future improvement*: Persist embedding vectors directly in PostgreSQL using the `pgvector` extension and perform indexing using HNSW (Hierarchical Navigable Small World) for sub-millisecond retrieval across millions of rows.
 
+### 4.6 Design Alternatives Considered
+
+During the design of the matching architecture, several alternative approaches were evaluated. The choices made reflect pragmatic engineering tradeoffs appropriate for an early-stage platform:
+
+#### 1. Weighted Linear Combination vs. Learned Ranking Model
+A trained ranking model (such as logistic regression, LambdaMART, or gradient boosted decision trees like XGBoost) could in theory learn non-linear feature interactions and better reflect empirical acceptance patterns. However, supervised ranking models require substantial volumes of historical ground-truth outcome data—specifically thousands of verified accept/reject decisions across diverse categories—which a greenfield deployment does not possess on day one.
+
+Attempting to train a model without this data introduces serious risks of overfitting to synthetic distributions or hallucinations of buyer preferences. A fixed, parameterized weighted linear combination represents a transparent, auditable cold-start baseline: every sub-score is inspectable, stakeholders can verify why a match scored what it did, and weights can be adjusted without retraining loops. The score-effectiveness validation endpoint (`GET /api/dashboard/score-effectiveness`) and its dashboard visualization provide the initial empirical feedback loop to monitor whether these default weights correlate with real buyer decisions or require recalibration.
+
+#### 2. Hybrid Scoring vs. Pure Vector / Similarity Search
+Relying solely on a vector database or nearest-neighbor embedding retrieval was rejected because semantic similarity addresses only product capability alignment, leaving critical commercial realities unconstrained (as discussed in Section 4.1). In B2B transactions, an offering with 98% semantic overlap is completely non-viable if the supplier requires a minimum order of 100,000 units against a buyer demand of 2,000, or charges 3× the allocated budget. Dense semantic embeddings provide capability discovery; deterministic arithmetic rules ensure transactional viability. Combining both into a single composite score ensures that recommendations are both technically relevant and commercially executable.
+
+#### 3. Local SentenceTransformers vs. Hosted Commercial Embedding APIs
+Using local `sentence-transformers/all-MiniLM-L6-v2` was selected over third-party hosted embedding APIs (such as OpenAI `text-embedding-3-small` or Cohere Embed):
+- **Tradeoff**: Proprietary hosted models offer higher dimensional spaces (1536+ dimensions) and marginally superior nuance on nuanced domain vocabularies.
+- **Decision**: In exchange, hosted APIs introduce recurring per-call monetary costs, network latency overhead (100–300 ms roundtrips vs. ~15 ms local CPU inference), rate limits, and external availability dependencies on the critical ingestion path. Running `all-MiniLM-L6-v2` locally keeps the core discovery pipeline fast, completely self-contained, zero-cost, and capable of operating entirely offline or in air-gapped VPCs without leaking sensitive RFQ descriptions to external third parties.
+
+#### 4. Evolution with Production Data
+As the platform matures and real user interactions accumulate, this architecture is designed to evolve. Once a statistically meaningful volume of accept/reject decisions is recorded across various score bands—tracked directly through the score-effectiveness calibration tooling—the fixed heuristic weights can be empirically validated, optimized via Bayesian optimization, or replaced with a learned-to-rank model trained on historical conversion signal. Moving from intuitive, rule-weighted heuristics to data-informed predictive ranking is the natural evolution path as platform volume grows.
+
 ---
 
 ## 5. API Reference
@@ -224,6 +244,7 @@ The FastAPI backend exposes versioned, RESTful endpoints under `/api`. All endpo
 - `POST /api/matching/run/{client_id}` — Trigger AI matching for a specific client requirement against all suppliers.
 - `POST /api/matching/run-all` — Batch run matching engine across all clients and suppliers in the database.
 - `GET /api/matches` — Paginated list of all stored matches with client, supplier, score, and status filters.
+- `GET /api/matches/export` — CSV export of all matches with current filters applied.
 - `GET /api/matches/{match_id}` — Retrieve detailed match record including all 6 component sub-scores and plain-English justification.
 - `PATCH /api/matches/{match_id}/status` — Update match disposition status (`pending`, `accepted`, `rejected`).
 
@@ -240,6 +261,8 @@ The FastAPI backend exposes versioned, RESTful endpoints under `/api`. All endpo
 - `GET /api/dashboard/suppliers/{supplier_id}` — Consolidated dashboard payload for supplier view (leads, conversion rate).
 - `GET /api/dashboard/category-breakdown` — Distribution of clients, suppliers, and matches grouped by industrial category.
 - `GET /api/dashboard/recent-activity` — Audit log stream of latest platform creations, match runs, and status updates.
+- `GET /api/dashboard/score-trend` — Average match score over time, grouped by day.
+- `GET /api/dashboard/score-effectiveness` — Acceptance rate by score band, validating whether match scores correlate with real accept/reject decisions.
 
 ---
 
@@ -368,16 +391,16 @@ pytest -v
 
 ### Test Suite Summary
 
-- **Total Tests**: **46 automated tests**
-- **Test Status**: **46 passed (100%)** in ~31 seconds
+- **Total Tests**: **50 automated tests**
+- **Test Status**: **50 passed (100%)** in ~28 seconds
 - **Test Coverage Breakdown**:
   - **`tests/test_matching_engine.py` (8 tests)**: Validates sentence transformer semantic differentiation, category exact matching, city/region location parsing, quantity capacity tiers, budget linear decay calculations, timeline regex parsing, and database transaction integration.
   - **`tests/test_api_hardening.py` (7 tests)**: Validates strict `{ items, total, limit, offset, has_more }` pagination envelopes, max page limit enforcement (rejecting limits $>100$ with HTTP 422), 404 handler envelopes for invalid UUIDs, and Pydantic validation error structures.
   - **`tests/test_clients.py` (9 tests)**: Full CRUD cycle for clients, required field validation, category filtering, and pagination offsets.
   - **`tests/test_suppliers.py` (9 tests)**: Full CRUD cycle for suppliers, price/quantity boundary tests, and category filtering.
-  - **`tests/test_matches_api.py` (3 tests)**: Single client matching API, batch match runner, and preservation of user-accepted/rejected statuses during background rescoring.
+  - **`tests/test_matches_api.py` (4 tests)**: Single client matching API, batch match runner, preservation of user-accepted/rejected statuses during background rescoring, and CSV export endpoint verification.
   - **`tests/test_notifications.py` (3 tests)**: Verifies dual notifications created upon match generation (one for client, one for supplier), notification deduplication on re-matching, unread counters, and mark-as-read endpoints.
-  - **`tests/test_dashboard.py` (5 tests)**: Executive summary statistics, role-filtered dashboard views, category aggregations, and recent audit activity streams.
+  - **`tests/test_dashboard.py` (8 tests)**: Executive summary statistics, role-filtered dashboard views, category aggregations, recent audit activity streams, plus 3 new analytics validation tests covering daily average match score trends over time (`/api/dashboard/score-trend`), acceptance rate calibration grouped across descending score bands (`/api/dashboard/score-effectiveness`), and edge-case handling when zero decided matches exist.
   - **`tests/test_health.py` (2 tests)**: Root landing endpoint and health check diagnostics verifying database connection and embedding model loading.
 
 ---
@@ -458,7 +481,7 @@ wisdom/
 │   │   ├── config.py               # Pydantic BaseSettings environment configurations
 │   │   ├── database.py             # SQLAlchemy engine & session factory
 │   │   └── main.py                 # FastAPI application factory & middleware setup
-│   ├── tests/                      # Automated Pytest suite (46 passing tests)
+│   ├── tests/                      # Automated Pytest suite (50 passing tests)
 │   │   ├── conftest.py             # Isolated SQLite/Postgres test fixtures
 │   │   ├── test_api_hardening.py   # Pagination envelope & error handling tests
 │   │   ├── test_clients.py         # Client CRUD & validation tests
@@ -468,6 +491,7 @@ wisdom/
 │   │   ├── test_matching_engine.py # Sub-score math & embedding tests
 │   │   ├── test_notifications.py   # In-app notification creation & deduplication tests
 │   │   └── test_suppliers.py       # Supplier CRUD & validation tests
+│   ├── demo_simulation.py          # Demo data simulator — assigns realistic accept/reject decisions across score bands for dashboard validation
 │   ├── Dockerfile                  # Production-ready backend container image
 │   ├── requirements.txt            # Pinned Python dependencies
 │   └── alembic.ini                 # Alembic configuration

@@ -58,6 +58,34 @@ def get_matches(
     return list(items), total
 
 
+def get_all_matches_for_export(
+    db: Session,
+    *,
+    client_id: Optional[uuid.UUID] = None,
+    supplier_id: Optional[uuid.UUID] = None,
+    status: Optional[str] = None,
+    min_score: Optional[float] = None,
+) -> List[Match]:
+    """
+    Retrieve all matches for CSV export respecting filters, ordered descending by match_score.
+    """
+    query = select(Match).options(joinedload(Match.client), joinedload(Match.supplier))
+
+    if client_id:
+        query = query.where(Match.client_id == client_id)
+    if supplier_id:
+        query = query.where(Match.supplier_id == supplier_id)
+    if status:
+        query = query.where(Match.status == status)
+    if min_score is not None:
+        query = query.where(Match.match_score >= min_score)
+
+    items = db.scalars(
+        query.order_by(Match.match_score.desc(), Match.created_at.desc())
+    ).unique().all()
+    return list(items)
+
+
 def upsert_match(
     db: Session,
     *,

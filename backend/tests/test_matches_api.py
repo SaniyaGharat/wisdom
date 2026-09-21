@@ -152,3 +152,73 @@ def test_rescore_preserves_manually_set_status(client):
     get_res = client.get(f"/api/matches/{match_id}")
     assert get_res.status_code == 200
     assert get_res.json()["status"] == "accepted"
+
+
+def test_matches_export_csv(client):
+    """
+    Verify GET /api/matches/export returns CSV content with all 13 columns and proper headers.
+    """
+    # 1. Create client & supplier and match
+    c_res = client.post(
+        "/api/clients",
+        json={
+            "company_name": "CSV Export Client",
+            "product_requirement": "Industrial Valves & Actuators",
+            "category": "Industrial Valves",
+            "quantity_required": 500,
+            "budget": 30000.00,
+            "location": "Houston, TX",
+            "delivery_timeline": "within 2 weeks",
+        },
+    )
+    assert c_res.status_code == 201
+    c_id = c_res.json()["id"]
+
+    s_res = client.post(
+        "/api/suppliers",
+        json={
+            "supplier_name": "Gulf Coast Flow Control",
+            "product_offered": "Forged Steel Valves & Pneumatic Actuators",
+            "category": "Industrial Valves",
+            "available_quantity": 2500,
+            "pricing_details": 45.00,
+            "location": "Houston, TX",
+            "delivery_capability": "ships in 5-7 days",
+        },
+    )
+    assert s_res.status_code == 201
+
+    client.post(f"/api/matching/run/{c_id}")
+
+    # 2. Call export endpoint
+    export_res = client.get("/api/matches/export")
+    assert export_res.status_code == 200
+    assert "text/csv" in export_res.headers["content-type"]
+    assert "matches_export.csv" in export_res.headers.get("content-disposition", "")
+
+    csv_text = export_res.text
+    lines = csv_text.strip().split("\r\n") if "\r\n" in csv_text else csv_text.strip().split("\n")
+    assert len(lines) >= 2
+
+    # Check header columns
+    header = lines[0].split(",")
+    expected_cols = [
+        "client_name",
+        "supplier_name",
+        "category",
+        "match_score",
+        "semantic_score",
+        "category_score",
+        "location_score",
+        "quantity_score",
+        "budget_score",
+        "delivery_score",
+        "status",
+        "match_reason",
+        "created_at",
+    ]
+    assert header == expected_cols
+
+    # Verify content in first data row
+    assert "CSV Export Client" in csv_text
+    assert "Gulf Coast Flow Control" in csv_text
