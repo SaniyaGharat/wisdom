@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { Check, ChevronDown, Loader2, MapPin, Sparkles, Undo2, X } from "lucide-react";
+import { AlertCircle, Check, ChevronDown, Loader2, MapPin, Sparkles, Undo2, X } from "lucide-react";
 import { toast } from "sonner";
 import { api, type Match } from "@/lib/api";
 import { formatRupees, formatRupeeText } from "@/lib/format";
@@ -23,6 +23,18 @@ export function MatchDashboard({ kind, id }: { kind: "client" | "supplier"; id: 
   const queryClient = useQueryClient();
   const queryKey = [kind, "dashboard", id];
   const query = useQuery({ queryKey, queryFn: () => kind === "client" ? api.getClientDashboard(id) : api.getSupplierDashboard(id), retry: 1 });
+  const fallbackList = useQuery({
+    queryKey: [kind === "client" ? "clients" : "suppliers", "fallback-list"],
+    queryFn: () => (kind === "client" ? api.getClients() : api.getSuppliers()),
+    enabled: query.isError,
+  });
+
+  useEffect(() => {
+    if (query.isError && query.error.message.toLowerCase().includes("not found")) {
+      window.localStorage.removeItem(`matchleaf_${kind}_id`);
+    }
+  }, [query.isError, query.error, kind]);
+
   const [running, setRunning] = useState(false);
   /** Track per-match in-flight status updates and optimistic status overrides */
   const [pendingAction, setPendingAction] = useState<Record<string | number, string>>({});
@@ -47,7 +59,80 @@ export function MatchDashboard({ kind, id }: { kind: "client" | "supplier"; id: 
   });
 
   if (query.isLoading) return <PageSkeleton rows={4} />;
-  if (query.isError) return <ErrorState message={query.error.message} retry={() => void query.refetch()} />;
+  if (query.isError) {
+    const isNotFound = query.error.message.toLowerCase().includes("not found");
+    const available = (fallbackList.data?.items || []) as Record<string, unknown>[];
+    const firstActive = available[0];
+
+    if (isNotFound) {
+      return (
+        <div className="page-wrap py-12">
+          <div className="mx-auto max-w-2xl rounded-xl border border-border bg-card p-8 shadow-soft">
+            <div className="flex items-center gap-3 text-warning">
+              <span className="grid size-10 place-items-center rounded-full bg-warning/15 text-warning">
+                <AlertCircle className="size-5" />
+              </span>
+              <div>
+                <h2 className="font-display text-xl font-semibold text-foreground">
+                  {kind === "client" ? "Client requirement" : "Supplier profile"} not found
+                </h2>
+                <p className="text-xs text-muted-foreground">ID: {id}</p>
+              </div>
+            </div>
+            <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
+              This {kind} record was not found in the database. This occurs when the database is re-seeded or when opening a previous session's link.
+            </p>
+            <div className="mt-6 flex flex-wrap gap-3">
+              {firstActive && (
+                <Button asChild>
+                  <Link
+                    to={kind === "client" ? "/clients/$id/dashboard" : "/suppliers/$id/dashboard"}
+                    params={{ id: String(firstActive.id) }}
+                    onClick={() => {
+                      window.localStorage.setItem(`matchleaf_${kind}_id`, String(firstActive.id));
+                    }}
+                  >
+                    Open active {kind}: {String(firstActive.company_name ?? firstActive.supplier_name ?? "Workspace")}
+                  </Link>
+                </Button>
+              )}
+              <Button variant="outline" asChild>
+                <Link to={kind === "client" ? "/clients/new" : "/suppliers/new"}>
+                  Create new {kind}
+                </Link>
+              </Button>
+              <Button variant="ghost" asChild>
+                <Link to="/admin">Admin overview</Link>
+              </Button>
+            </div>
+            {available.length > 1 && (
+              <div className="mt-6 border-t border-border pt-4">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Or choose from existing {kind}s:
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {available.slice(0, 6).map((item) => (
+                    <Link
+                      key={String(item.id)}
+                      to={kind === "client" ? "/clients/$id/dashboard" : "/suppliers/$id/dashboard"}
+                      params={{ id: String(item.id) }}
+                      className="rounded-md border border-border bg-muted/60 px-3 py-1.5 text-xs font-medium text-foreground hover:bg-accent transition-colors"
+                      onClick={() => {
+                        window.localStorage.setItem(`matchleaf_${kind}_id`, String(item.id));
+                      }}
+                    >
+                      {String(item.company_name ?? item.supplier_name ?? item.id)}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+    return <ErrorState message={query.error.message} retry={() => void query.refetch()} />;
+  }
   const data = query.data || {};
   const profile = (data[kind] || data.requirement || data.profile || {}) as Record<string, unknown>;
   const matchSource = data.matches;

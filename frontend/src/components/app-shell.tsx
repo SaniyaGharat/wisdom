@@ -5,11 +5,22 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 
-function SessionLink({ type, id }: { type: "client" | "supplier"; id: string }) {
+function SessionLink({ type, id, name }: { type: "client" | "supplier"; id: string; name?: string }) {
   const to = type === "client" ? "/clients/$id/dashboard" : "/suppliers/$id/dashboard";
   return (
-    <Link to={to} params={{ id }} className="flex items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-accent">
-      {type === "client" ? <Building2 /> : <Store />} {type === "client" ? "Client dashboard" : "Supplier dashboard"}
+    <Link
+      to={to}
+      params={{ id }}
+      className="flex flex-col rounded-md px-3 py-2 text-sm hover:bg-accent transition-colors"
+      onClick={() => {
+        window.localStorage.setItem(`matchleaf_${type}_id`, id);
+      }}
+    >
+      <span className="flex items-center gap-2 font-medium">
+        {type === "client" ? <Building2 className="size-4 text-primary" /> : <Store className="size-4 text-primary" />}
+        {type === "client" ? "Client dashboard" : "Supplier dashboard"}
+      </span>
+      {name && <span className="mt-0.5 truncate text-xs text-muted-foreground">{name}</span>}
     </Link>
   );
 }
@@ -17,17 +28,47 @@ function SessionLink({ type, id }: { type: "client" | "supplier"; id: string }) 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [sessionOpen, setSessionOpen] = useState(false);
-  const [ids, setIds] = useState<{ client: string | undefined; supplier: string | undefined }>({ client: undefined, supplier: undefined });
+  const [ids, setIds] = useState<{
+    client: string | undefined;
+    supplier: string | undefined;
+    clientName: string | undefined;
+    supplierName: string | undefined;
+  }>({ client: undefined, supplier: undefined, clientName: undefined, supplierName: undefined });
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const health = useQuery({ queryKey: ["health"], queryFn: api.getHealth, refetchInterval: 60000, retry: 1 });
+  const clientsQuery = useQuery({ queryKey: ["clients", "workspace-list"], queryFn: () => api.getClients(), staleTime: 30000, retry: 1 });
+  const suppliersQuery = useQuery({ queryKey: ["suppliers", "workspace-list"], queryFn: () => api.getSuppliers(), staleTime: 30000, retry: 1 });
+
+  const clientList = (clientsQuery.data?.items || []) as Record<string, unknown>[];
+  const supplierList = (suppliersQuery.data?.items || []) as Record<string, unknown>[];
 
   useEffect(() => {
+    const storedClientId = window.localStorage.getItem("matchleaf_client_id");
+    const storedSupplierId = window.localStorage.getItem("matchleaf_supplier_id");
+
+    let validClient = clientList.find((c) => String(c.id) === storedClientId);
+    if (!validClient && clientList.length > 0) {
+      // Heal localStorage: Stale ID replaced with first active client in DB
+      validClient = clientList[0];
+      window.localStorage.setItem("matchleaf_client_id", String(validClient.id));
+    }
+
+    let validSupplier = supplierList.find((s) => String(s.id) === storedSupplierId);
+    if (!validSupplier && supplierList.length > 0) {
+      // Heal localStorage: Stale ID replaced with first active supplier in DB
+      validSupplier = supplierList[0];
+      window.localStorage.setItem("matchleaf_supplier_id", String(validSupplier.id));
+    }
+
     setIds({
-      client: window.localStorage.getItem("matchleaf_client_id") || undefined,
-      supplier: window.localStorage.getItem("matchleaf_supplier_id") || undefined,
+      client: validClient ? String(validClient.id) : undefined,
+      supplier: validSupplier ? String(validSupplier.id) : undefined,
+      clientName: validClient ? String(validClient.company_name ?? "") : undefined,
+      supplierName: validSupplier ? String(validSupplier.supplier_name ?? "") : undefined,
     });
     setMobileOpen(false);
-  }, [pathname]);
+    setSessionOpen(false);
+  }, [clientList, supplierList, pathname]);
 
   const links = (
     <>
@@ -52,10 +93,31 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               My workspace <ChevronDown className="size-3.5" />
             </Button>
             {sessionOpen && (
-              <div className="absolute right-0 top-11 w-56 rounded-lg border border-border bg-popover p-2 shadow-soft">
-                {ids.client && <SessionLink type="client" id={ids.client} />}
-                {ids.supplier && <SessionLink type="supplier" id={ids.supplier} />}
-                {!ids.client && !ids.supplier && <p className="px-3 py-2 text-sm text-muted-foreground">Create a profile to save your workspace.</p>}
+              <div className="absolute right-0 top-11 w-64 rounded-lg border border-border bg-popover p-2 shadow-soft">
+                <p className="px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Active Workspaces</p>
+                {ids.client ? (
+                  <SessionLink type="client" id={ids.client} name={ids.clientName} />
+                ) : (
+                  <Link to="/clients/new" className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-accent">
+                    <Building2 className="size-4" /> Create client profile
+                  </Link>
+                )}
+                {ids.supplier ? (
+                  <SessionLink type="supplier" id={ids.supplier} name={ids.supplierName} />
+                ) : (
+                  <Link to="/suppliers/new" className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-accent">
+                    <Store className="size-4" /> Create supplier profile
+                  </Link>
+                )}
+                <div className="my-1.5 border-t border-border" />
+                <div className="flex flex-col gap-0.5 text-xs text-muted-foreground">
+                  <Link to="/clients/new" className="rounded px-3 py-1.5 hover:bg-accent hover:text-foreground">
+                    + New client requirement
+                  </Link>
+                  <Link to="/suppliers/new" className="rounded px-3 py-1.5 hover:bg-accent hover:text-foreground">
+                    + New supplier offering
+                  </Link>
+                </div>
               </div>
             )}
           </div>
@@ -67,7 +129,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             {mobileOpen ? <X /> : <Menu />}
           </Button>
         </div>
-        {mobileOpen && <nav className="flex flex-col border-t border-border px-4 py-3 lg:hidden">{links}</nav>}
+        {mobileOpen && (
+          <nav className="flex flex-col border-t border-border px-4 py-3 lg:hidden">
+            {links}
+            <div className="my-2 border-t border-border pt-2">
+              <p className="px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">My Workspace</p>
+              {ids.client && <SessionLink type="client" id={ids.client} name={ids.clientName} />}
+              {ids.supplier && <SessionLink type="supplier" id={ids.supplier} name={ids.supplierName} />}
+            </div>
+          </nav>
+        )}
       </header>
       <main>{children}</main>
       <footer className="border-t border-border bg-card py-6">
