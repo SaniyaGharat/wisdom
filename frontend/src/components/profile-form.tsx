@@ -42,7 +42,7 @@ const configs = {
     name: ["supplier_name", "Supplier name", "e.g. Goodgrain Packaging"],
     product: ["product_offered", "What do you offer?", "Describe your products, materials, capabilities, or certifications."],
     quantity: ["available_quantity", "Available quantity"],
-    money: ["pricing_details", "Pricing details (₹)"],
+    money: ["pricing_details", "Price per unit (₹)"],
     timeline: ["delivery_capability", "Delivery capability", "e.g. Ships nationally within 10 days"],
   },
 } as const;
@@ -109,6 +109,13 @@ export function ProfileForm({ kind, id }: { kind: Kind; id?: string }) {
       const budget = Number(values["budget"]);
       if (!Number.isFinite(budget) || budget <= 0) nextErrors["budget"] = "Budget must be a number greater than zero.";
     }
+    if (kind === "supplier") {
+      const cleaned = String(values["pricing_details"] || "").replace(/[^0-9.]/g, "");
+      const price = Number(cleaned);
+      if (!Number.isFinite(price) || price <= 0) {
+        nextErrors["pricing_details"] = "Price per unit must be a number greater than 0 (e.g. 78). Add discount notes in description.";
+      }
+    }
     if (Object.keys(nextErrors).length) {
       setErrors(nextErrors);
       return;
@@ -121,6 +128,7 @@ export function ProfileForm({ kind, id }: { kind: Kind; id?: string }) {
         [config.quantity[0]]: quantity,
       };
       if (kind === "client") payload["budget"] = Number(values["budget"]);
+      if (kind === "supplier") payload["pricing_details"] = Number(String(values["pricing_details"] || "").replace(/[^0-9.]/g, ""));
       const result = id
         ? await (kind === "client" ? api.updateClient(id, payload) : api.updateSupplier(id, payload))
         : await (kind === "client" ? api.createClient(payload) : api.createSupplier(payload));
@@ -230,14 +238,18 @@ export function ProfileForm({ kind, id }: { kind: Kind; id?: string }) {
           <Field label={config.quantity[1]} error={errors[config.quantity[0]]}>
             <Input type="number" min="0" step="any" value={values[config.quantity[0]] || ""} onChange={(e) => set(config.quantity[0], e.target.value)} />
           </Field>
-          <Field label={config.money[1]} error={errors[config.money[0]]}>
+          <Field
+            label={config.money[1]}
+            error={errors[config.money[0]]}
+            hint={kind === "supplier" ? "Enter unit price (₹). Put volume discounts in notes below." : undefined}
+          >
             <Input
-              type={kind === "client" ? "number" : "text"}
-              min={kind === "client" ? "0" : undefined}
+              type="number"
+              min="0"
               step="any"
               value={values[config.money[0]] || ""}
               onChange={(e) => set(config.money[0], e.target.value)}
-              placeholder={kind === "supplier" ? "e.g. ₹350 per unit, volume discounts" : "e.g. 500000"}
+              placeholder={kind === "supplier" ? "e.g. 78 or 78.50" : "e.g. 500000"}
             />
           </Field>
           <Field label="Location" error={errors["location"]}>
