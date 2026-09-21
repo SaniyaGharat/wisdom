@@ -198,3 +198,23 @@
 .expanded-row td { background: var(--muted); border-bottom: 1px solid var(--border); }
 .expanded-row:hover td { background: var(--muted); }
 tr.cursor-pointer:hover { background: color-mix(in oklab, var(--muted) 50%, transparent); }
+
+/* Custom sleek scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: var(--muted);
+  border-radius: 9999px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: color-mix(in oklab, var(--muted-foreground) 40%, transparent);
+  border-radius: 9999px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--muted-foreground);
+}
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--muted-foreground) 40%, transparent) var(--muted);
+}
