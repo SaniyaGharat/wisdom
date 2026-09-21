@@ -93,7 +93,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               My workspace <ChevronDown className="size-3.5" />
             </Button>
             {sessionOpen && (
-              <div className="absolute right-0 top-11 w-64 rounded-lg border border-border bg-popover p-2 shadow-soft">
+              <div className="absolute right-0 top-11 w-72 rounded-lg border border-border bg-popover p-2 shadow-soft">
                 <p className="px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Active Workspaces</p>
                 {ids.client ? (
                   <SessionLink type="client" id={ids.client} name={ids.clientName} />
@@ -108,6 +108,50 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   <Link to="/suppliers/new" className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-accent">
                     <Store className="size-4" /> Create supplier profile
                   </Link>
+                )}
+                {clientList.length > 1 && (
+                  <div className="my-1.5 border-t border-border pt-1.5">
+                    <p className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">All Clients ({clientList.length})</p>
+                    <div className="max-h-28 overflow-y-auto space-y-0.5">
+                      {clientList.map((c) => (
+                        <Link
+                          key={String(c.id)}
+                          to="/clients/$id/dashboard"
+                          params={{ id: String(c.id) }}
+                          className={`flex items-center justify-between rounded px-3 py-1 text-xs hover:bg-accent ${String(c.id) === ids.client ? "font-semibold text-primary bg-muted/60" : "text-muted-foreground"}`}
+                          onClick={() => {
+                            window.localStorage.setItem("matchleaf_client_id", String(c.id));
+                            setSessionOpen(false);
+                          }}
+                        >
+                          <span className="truncate max-w-[150px]">{String(c.company_name)}</span>
+                          <span className="text-[10px] opacity-70 truncate max-w-[90px]">{String(c.category)}</span>
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {supplierList.length > 1 && (
+                  <div className="my-1.5 border-t border-border pt-1.5">
+                    <p className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">All Suppliers ({supplierList.length})</p>
+                    <div className="max-h-28 overflow-y-auto space-y-0.5">
+                      {supplierList.map((s) => (
+                        <Link
+                          key={String(s.id)}
+                          to="/suppliers/$id/dashboard"
+                          params={{ id: String(s.id) }}
+                          className={`flex items-center justify-between rounded px-3 py-1 text-xs hover:bg-accent ${String(s.id) === ids.supplier ? "font-semibold text-primary bg-muted/60" : "text-muted-foreground"}`}
+                          onClick={() => {
+                            window.localStorage.setItem("matchleaf_supplier_id", String(s.id));
+                            setSessionOpen(false);
+                          }}
+                        >
+                          <span className="truncate max-w-[150px]">{String(s.supplier_name)}</span>
+                          <span className="text-[10px] opacity-70 truncate max-w-[90px]">{String(s.category)}</span>
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
                 )}
                 <div className="my-1.5 border-t border-border" />
                 <div className="flex flex-col gap-0.5 text-xs text-muted-foreground">

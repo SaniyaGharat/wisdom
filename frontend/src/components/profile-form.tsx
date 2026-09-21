@@ -136,7 +136,19 @@ export function ProfileForm({ kind, id }: { kind: Kind; id?: string }) {
       if (!newId) throw new Error("The profile was saved, but no profile ID was returned.");
       window.localStorage.setItem(`matchleaf_${kind}_id`, newId);
       setCreatedId(newId);
-      toast.success(id ? "Profile updated" : "Profile created—ready to find matches.");
+
+      // Auto-trigger matching and navigate directly to dashboard
+      try {
+        await api.runMatching(newId);
+      } catch {
+        // Continue even if initial run completes with 0 matches
+      }
+      toast.success(id ? "Profile updated" : "Profile created—viewing your matches.");
+      if (kind === "client") {
+        await navigate({ to: "/clients/$id/dashboard", params: { id: newId } });
+      } else {
+        await navigate({ to: "/suppliers/$id/dashboard", params: { id: newId } });
+      }
     } catch (error) {
       if (error instanceof ApiError) setErrors(error.fields);
       toast.error(error instanceof Error ? error.message : "We couldn’t save your profile.");

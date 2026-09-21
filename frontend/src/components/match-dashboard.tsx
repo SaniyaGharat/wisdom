@@ -23,11 +23,12 @@ export function MatchDashboard({ kind, id }: { kind: "client" | "supplier"; id: 
   const queryClient = useQueryClient();
   const queryKey = [kind, "dashboard", id];
   const query = useQuery({ queryKey, queryFn: () => kind === "client" ? api.getClientDashboard(id) : api.getSupplierDashboard(id), retry: 1 });
-  const fallbackList = useQuery({
-    queryKey: [kind === "client" ? "clients" : "suppliers", "fallback-list"],
+  const allProfilesQuery = useQuery({
+    queryKey: [kind === "client" ? "clients" : "suppliers", "all-list"],
     queryFn: () => (kind === "client" ? api.getClients() : api.getSuppliers()),
-    enabled: query.isError,
+    staleTime: 30000,
   });
+  const fallbackList = allProfilesQuery;
 
   useEffect(() => {
     if (query.isError && query.error.message.toLowerCase().includes("not found")) {
@@ -140,8 +141,37 @@ export function MatchDashboard({ kind, id }: { kind: "client" | "supplier"; id: 
   const name = text(profile[kind === "client" ? "company_name" : "supplier_name"], kind === "client" ? "Your requirement" : "Your supply profile");
   const product = text(profile[kind === "client" ? "product_requirement" : "product_offered"]);
   async function rerun() { setRunning(true); try { await api.runMatching(id); await query.refetch(); toast.success("Fresh matches are ready"); } catch (error) { toast.error(error instanceof Error ? error.message : "Matching failed"); } finally { setRunning(false); } }
+  const allProfiles = (allProfilesQuery.data?.items || []) as Record<string, unknown>[];
   return <div className="page-wrap">
-    <div className="mb-7 flex flex-wrap items-start justify-between gap-4"><div><span className="eyebrow">{kind} workspace</span><h1 className="page-title mt-3">Matches for {name}</h1></div><div className="flex gap-2"><NotificationBell /><Button onClick={rerun} disabled={running}><Sparkles />{running ? "Matching…" : "Find matches"}</Button></div></div>
+    <div className="mb-7 flex flex-wrap items-start justify-between gap-4">
+      <div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="eyebrow">{kind} workspace</span>
+          {allProfiles.length > 1 && (
+            <select
+              className="rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-foreground cursor-pointer shadow-xs focus:ring-1 focus:ring-primary"
+              value={id}
+              onChange={(e) => {
+                const targetId = e.target.value;
+                window.localStorage.setItem(`matchleaf_${kind}_id`, targetId);
+                window.location.href = kind === "client" ? `/clients/${targetId}/dashboard` : `/suppliers/${targetId}/dashboard`;
+              }}
+            >
+              {allProfiles.map((p) => (
+                <option key={String(p.id)} value={String(p.id)}>
+                  {String(p.company_name ?? p.supplier_name)} ({String(p.category)})
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+        <h1 className="page-title mt-2">Matches for {name}</h1>
+      </div>
+      <div className="flex gap-2">
+        <NotificationBell />
+        <Button onClick={rerun} disabled={running}><Sparkles />{running ? "Matching…" : "Find matches"}</Button>
+      </div>
+    </div>
     <section className="requirement-strip">
       <div>
         <p className="text-xs font-bold uppercase text-muted-foreground">Your {kind === "client" ? "requirement" : "offer"}</p>

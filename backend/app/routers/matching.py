@@ -4,8 +4,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.crud.client import get_client
+from app.crud.supplier import get_supplier
 from app.schemas.match import MatchResponse, BatchMatchingResponse
-from app.services.matching_engine import run_matching_for_client, run_matching_all
+from app.services.matching_engine import (
+    run_matching_for_client,
+    run_matching_for_supplier,
+    run_matching_all,
+)
 
 router = APIRouter(prefix="/matching", tags=["AI Matching Engine"])
 
@@ -14,8 +20,8 @@ router = APIRouter(prefix="/matching", tags=["AI Matching Engine"])
     "/run/{client_id}",
     response_model=List[MatchResponse],
     status_code=status.HTTP_200_OK,
-    summary="Trigger AI matching for a specific client",
-    description="Run the hybrid AI matching engine (semantic embeddings + business rules) for a client against all suppliers. Upserts matches above threshold and returns them ranked by score.",
+    summary="Trigger AI matching for a specific client or supplier",
+    description="Run the hybrid AI matching engine (semantic embeddings + business rules) for a client against all suppliers, or for a supplier against all clients. Upserts matches above threshold and returns them ranked by score.",
     response_description="List of calculated matches ranked by composite match score",
 )
 def match_client(
@@ -24,12 +30,43 @@ def match_client(
     db: Session = Depends(get_db),
 ):
     """
-    Run the hybrid AI matching engine for a single client requirement against all suppliers.
+    Run the hybrid AI matching engine for a single client requirement or supplier against the opposite universe.
     Qualifying matches above threshold are upserted into the database and returned ranked by score.
     """
+    # Check if client exists
+    c = get_client(db, client_id)
+    if c:
+        return run_matching_for_client(db=db, client_id=client_id, min_score=min_score)
+
+    # If not a client, check if it's a supplier
+    s = get_supplier(db, client_id)
+    if s:
+        return run_matching_for_supplier(db=db, supplier_id=client_id, min_score=min_score)
+
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail=f"Client or supplier with id {client_id} not found",
+    )
+
+
+@router.post(
+    "/run-supplier/{supplier_id}",
+    response_model=List[MatchResponse],
+    status_code=status.HTTP_200_OK,
+    summary="Trigger AI matching for a specific supplier",
+    description="Run the hybrid AI matching engine for a specific supplier offering against all client requirements.",
+    response_description="List of calculated matches ranked by composite match score",
+)
+def match_supplier(
+    supplier_id: uuid.UUID,
+    min_score: Optional[float] = Query(None, ge=0.0, le=100.0, description="Optional minimum match score filter (0-100)"),
+    db: Session = Depends(get_db),
+):
+    """
+    Run the hybrid AI matching engine for a supplier offering against all clients.
+    """
     try:
-        matches = run_matching_for_client(db=db, client_id=client_id, min_score=min_score)
-        return matches
+        return run_matching_for_supplier(db=db, supplier_id=supplier_id, min_score=min_score)
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
