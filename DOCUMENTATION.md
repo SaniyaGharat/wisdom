@@ -15,22 +15,22 @@ The platform follows a clean, decoupled service architecture consisting of a **R
 ```mermaid
 graph TD
     subgraph Client Layer
-        UI["React 19 + TypeScript SPA<br/>(Vite, TanStack Router/Query, Tailwind CSS)"]
+        UI["React 19 + TypeScript SPA<br/>Vite, TanStack Router/Query, Tailwind CSS"]
     end
 
-    subgraph API Gateway & Service Layer
-        API["FastAPI REST Backend (:8000)<br/>(Pydantic v2, CORS, Structured Exception Envelopes)"]
+    subgraph API Gateway and Service Layer
+        API["FastAPI REST Backend :8000<br/>Pydantic v2, CORS, Structured Exception Envelopes"]
         Router["Routers: /clients, /suppliers, /matching, /notifications, /dashboard"]
     end
 
-    subgraph Core Engines & Services
-        Engine["AI Matching Engine<br/>(SentenceTransformers all-MiniLM-L6-v2 + Cosine Similarity)"]
-        Scorer["Deterministic Business Scorer<br/>(Category, Location, Quantity, Budget, Delivery)"]
-        NotifService["Notification Service<br/>(BaseNotificationProvider -> DatabaseNotificationProvider)"]
+    subgraph Core Engines and Services
+        Engine["AI Matching Engine<br/>SentenceTransformers all-MiniLM-L6-v2 + Cosine Similarity"]
+        Scorer["Deterministic Business Scorer<br/>Category, Location, Quantity, Budget, Delivery"]
+        NotifService["Notification Service<br/>BaseNotificationProvider to DatabaseNotificationProvider"]
     end
 
     subgraph Persistence Layer
-        DB[("PostgreSQL Database (:5432)<br/>(Clients, Suppliers, Matches, Notifications)")]
+        DB[("PostgreSQL Database :5432<br/>Clients, Suppliers, Matches, Notifications")]
     end
 
     UI -->|"HTTP / JSON REST API"| API
@@ -58,7 +58,7 @@ The core workflow executes from requirement ingestion through AI scoring to mult
       ▼
 [PostgreSQL: clients table]
       │
-      │ 3. Automatically triggers matching pipeline (or POST /api/matching/client/{id})
+      │ 3. Automatically triggers matching pipeline (or POST /api/matching/run/{client_id})
       ▼
 [AI Matching Engine Service]
       │
@@ -220,24 +220,24 @@ The FastAPI backend exposes versioned, RESTful endpoints under `/api`. All endpo
 - `PUT /api/suppliers/{supplier_id}` — Update supplier catalog parameters, capacity, and pricing.
 - `DELETE /api/suppliers/{supplier_id}` — Delete supplier profile and associated match relations.
 
-#### 4. Matching Engine
-- `POST /api/matching/client/{client_id}` — Compute, score, and persist top supplier matches for a specific client requirement.
-- `POST /api/matching/run-all` — Batch run matching engine across all active clients and suppliers in the database.
-- `GET /api/matching/client/{client_id}/top` — Query scored matches for a client with custom minimum score thresholds.
-- `GET /api/matches/` — Paginated list of all stored matches with client, supplier, score, and status filters.
-- `GET /api/matches/{match_id}` — Retrieve detailed match breakdown including all 6 component sub-scores.
+#### 4. Matching Engine & Matches
+- `POST /api/matching/run/{client_id}` — Trigger AI matching for a specific client requirement against all suppliers.
+- `POST /api/matching/run-all` — Batch run matching engine across all clients and suppliers in the database.
+- `GET /api/matches` — Paginated list of all stored matches with client, supplier, score, and status filters.
+- `GET /api/matches/{match_id}` — Retrieve detailed match record including all 6 component sub-scores and plain-English justification.
 - `PATCH /api/matches/{match_id}/status` — Update match disposition status (`pending`, `accepted`, `rejected`).
 
 #### 5. Notifications
-- `GET /api/notifications/` — Paginated list of notifications with filtering by recipient, read status, and date.
-- `GET /api/notifications/unread-count` — Fast count of unread notifications for navigation badges.
+- `GET /api/notifications` — Paginated list of notifications with filtering by recipient and read status.
+- `GET /api/notifications/unread-count` — Count of unread notifications for navigation badges.
+- `GET /api/notifications/{notification_id}` — Retrieve an individual notification by ID.
 - `PATCH /api/notifications/{notification_id}/read` — Mark an individual notification as read.
-- `POST /api/notifications/mark-all-read` — Bulk mark all notifications as read for a given recipient.
+- `PATCH /api/notifications/mark-all-read` — Bulk mark notifications as read for a given recipient.
 
 #### 6. Analytics & Dashboard
 - `GET /api/dashboard/summary` — Executive overview KPIs (total clients, suppliers, matches, average score, acceptance rate).
-- `GET /api/dashboard/client/{client_id}` — Consolidated dashboard payload for buyer view (active requirement, matches, stats).
-- `GET /api/dashboard/supplier/{supplier_id}` — Consolidated dashboard payload for supplier view (leads, conversion rate).
+- `GET /api/dashboard/clients/{client_id}` — Consolidated dashboard payload for buyer view (active requirement, matches, stats).
+- `GET /api/dashboard/suppliers/{supplier_id}` — Consolidated dashboard payload for supplier view (leads, conversion rate).
 - `GET /api/dashboard/category-breakdown` — Distribution of clients, suppliers, and matches grouped by industrial category.
 - `GET /api/dashboard/recent-activity` — Audit log stream of latest platform creations, match runs, and status updates.
 
@@ -247,13 +247,13 @@ The FastAPI backend exposes versioned, RESTful endpoints under `/api`. All endpo
 
 Because this evaluation is conducted locally, follow these tested instructions to run both services.
 
-### ⚡ Quick Start (5 Minutes to Evaluation)
+###  Quick Start
 
 If you have Docker installed, you can launch the backend and database with one command, then start the frontend:
 
 ```bash
 # 1. Clone and navigate to project root
-git clone <repository-url>
+git clone https://github.com/SaniyaGharat/wisdom
 cd wisdom
 
 # 2. Launch Backend & PostgreSQL (Applies migrations + seeds data + starts API on :8000)
@@ -265,7 +265,7 @@ npm install
 npm run dev
 ```
 
-Open **`http://localhost:8080`** (or `http://localhost:5173`) in your browser to explore the live dashboard and run matches.
+Open **`http://localhost:8080`** in your browser to explore the live dashboard and run matches.
 
 ---
 
@@ -289,7 +289,7 @@ docker-compose up --build
 
 - Database initializes automatically on port `5432`.
 - Alembic runs `alembic upgrade head`.
-- The database seeds with 9 diverse clients, 9 suppliers, and 43 pre-computed AI matches.
+- The database seeds sample clients and suppliers, generating dozens of pre-computed AI matches across industrial categories.
 - FastAPI server starts on **`http://localhost:8000`**.
 - Interactive Swagger docs are ready at **`http://localhost:8000/docs`**.
 
@@ -349,7 +349,7 @@ npm run dev
 ```
 
 The Vite dev server will print the active URL:
-- Local: **`http://localhost:8080/`** (or `http://localhost:5173/`)
+- Local: **`http://localhost:8080/`**
 - Open the URL in any modern browser to view the application.
 
 ---
