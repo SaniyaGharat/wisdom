@@ -23,10 +23,12 @@ def get_matches(
     supplier_id: Optional[uuid.UUID] = None,
     status: Optional[str] = None,
     min_score: Optional[float] = None,
+    sort_by: str = "match_score",
+    sort_order: str = "desc",
 ) -> Tuple[List[Match], int]:
     """
     Retrieve matches with optional filtering by client_id, supplier_id, status,
-    and min_score, sorted descending by match_score.
+    and min_score, sorted by sort_by in sort_order.
     Returns (items, total_count).
     """
     query = select(Match).options(joinedload(Match.client), joinedload(Match.supplier))
@@ -49,8 +51,20 @@ def get_matches(
         count_query = count_query.where(Match.match_score >= min_score)
 
     total = db.scalar(count_query) or 0
+
+    sort_col = Match.match_score
+    if sort_by == "created_at":
+        sort_col = Match.created_at
+    elif sort_by == "match_score":
+        sort_col = Match.match_score
+
+    if sort_order.lower() == "asc":
+        order_clauses = [sort_col.asc(), Match.created_at.asc()]
+    else:
+        order_clauses = [sort_col.desc(), Match.created_at.desc()]
+
     items = db.scalars(
-        query.order_by(Match.match_score.desc(), Match.created_at.desc())
+        query.order_by(*order_clauses)
         .offset(offset)
         .limit(limit)
     ).unique().all()

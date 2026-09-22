@@ -27,10 +27,12 @@ def list_matches(
     supplier_id: Optional[uuid.UUID] = Query(None, description="Filter by supplier UUID"),
     status: Optional[str] = Query(None, description="Filter by match status ('pending', 'notified', 'accepted', 'rejected')"),
     min_score: Optional[float] = Query(None, ge=0.0, le=100.0, description="Minimum match score threshold (0-100)"),
+    sort_by: str = Query("match_score", description="Field to sort by ('match_score', 'created_at')"),
+    sort_order: str = Query("desc", description="Sort direction ('asc' or 'desc')"),
     db: Session = Depends(get_db),
 ):
     """
-    List stored matches ordered by match_score descending with optional filtering.
+    List stored matches with optional filtering and sorting.
     """
     items, total = crud_match.get_matches(
         db=db,
@@ -40,6 +42,8 @@ def list_matches(
         supplier_id=supplier_id,
         status=status,
         min_score=min_score,
+        sort_by=sort_by,
+        sort_order=sort_order,
     )
     return PaginatedResponse[MatchResponse].create(
         items=items,
