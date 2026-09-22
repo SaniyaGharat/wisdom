@@ -39,24 +39,26 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const clientsQuery = useQuery({ queryKey: ["clients", "workspace-list"], queryFn: () => api.getClients(), staleTime: 30000, retry: 1 });
   const suppliersQuery = useQuery({ queryKey: ["suppliers", "workspace-list"], queryFn: () => api.getSuppliers(), staleTime: 30000, retry: 1 });
 
-  const clientList = (clientsQuery.data?.items || []) as Record<string, unknown>[];
-  const supplierList = (suppliersQuery.data?.items || []) as Record<string, unknown>[];
+  const clientList = clientsQuery.data?.items as Record<string, unknown>[] | undefined;
+  const supplierList = suppliersQuery.data?.items as Record<string, unknown>[] | undefined;
 
   useEffect(() => {
+    const clients = clientList || [];
+    const suppliers = supplierList || [];
     const storedClientId = window.localStorage.getItem("matchleaf_client_id");
     const storedSupplierId = window.localStorage.getItem("matchleaf_supplier_id");
 
-    let validClient = clientList.find((c) => String(c.id) === storedClientId);
-    if (!validClient && clientList.length > 0) {
+    let validClient = clients.find((c) => String(c.id) === storedClientId);
+    if (!validClient && clients.length > 0) {
       // Heal localStorage: Stale ID replaced with first active client in DB
-      validClient = clientList[0];
+      validClient = clients[0];
       window.localStorage.setItem("matchleaf_client_id", String(validClient.id));
     }
 
-    let validSupplier = supplierList.find((s) => String(s.id) === storedSupplierId);
-    if (!validSupplier && supplierList.length > 0) {
+    let validSupplier = suppliers.find((s) => String(s.id) === storedSupplierId);
+    if (!validSupplier && suppliers.length > 0) {
       // Heal localStorage: Stale ID replaced with first active supplier in DB
-      validSupplier = supplierList[0];
+      validSupplier = suppliers[0];
       window.localStorage.setItem("matchleaf_supplier_id", String(validSupplier.id));
     }
 
