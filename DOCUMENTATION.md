@@ -48,25 +48,31 @@ graph TD
 The core workflow executes from requirement ingestion through AI scoring to multi-stakeholder alert dispatch:
 
 ```
-[Client User]
+[Client or Supplier User]
       │
-      │ 1. Submits Procurement Requirement via UI Form
+      │ 1. Submits Procurement Requirement or Offering via UI Form
       ▼
-[FastAPI Backend: POST /api/clients]
+[FastAPI Backend: POST /api/clients or POST /api/suppliers]
       │
       │ 2. Validates payload via Pydantic & persists to PostgreSQL
       ▼
-[PostgreSQL: clients table]
+[PostgreSQL: clients & suppliers tables]
       │
-      │ 3. Automatically triggers matching pipeline (or POST /api/matching/run/{client_id})
+      │ 3. Triggers matching pipeline:
+      │    - Automatic trigger on ingestion
+      │    - On-demand trigger: POST /api/matching/run/{id} (client or supplier)
+      │    - Dedicated supplier trigger: POST /api/matching/run-supplier/{supplier_id}
+      │    - Frontend renders multi-stage animated MatchmakingProgressModal
       ▼
 [AI Matching Engine Service]
       │
-      ├─► Fetches active suppliers from PostgreSQL
+      ├─► Fetches opposite universe (active suppliers for client, or active clients for supplier)
       ├─► Generates/retrieves 384-dim dense embeddings (all-MiniLM-L6-v2)
       ├─► Computes Cosine Similarity (35% weight)
       ├─► Evaluates Deterministic Business Rules (Category 20%, Location 15%, Quantity 10%, Budget 10%, Delivery 10%)
-      └─► Computes composite 0-100 score and human-readable match_reason
+      ├─► Computes composite 0-100 score and granular sub-scores
+      ├─► Generates human-readable match_reason
+      └─► Synthesizes 2-sentence executive analyst briefing (match_summary) isolating caveats below 0.75
       │
       │ 4. Upserts qualified records (score >= 40.0)
       ▼
@@ -86,7 +92,8 @@ The core workflow executes from requirement ingestion through AI scoring to mult
       │ 7. React Query polls / invalidates cache via GET /api/dashboard and GET /api/notifications
       ▼
 [Client & Supplier Dashboards]
-      Displays ranked match cards, radial progress score rings, multi-metric breakdown & notifications
+      Displays ranked match cards, radial progress score rings, multi-metric breakdown,
+      executive analyst briefings, supplier verification badges, and in-app notifications
 ```
 
 ---
@@ -182,7 +189,49 @@ $$\begin{aligned}
 #### **Generated Plain-English `match_reason`**:
 > *"Strong semantic alignment on product requirement (82%). Exact category match ('Raw Materials'). Within budget (₹87,000.00 <= ₹95,000.00). Sufficient supply (40,000 available for 12,000 required). Co-located in Hyderabad, Telangana, India. Delivery capability meets timeline (ships in 14-20 days vs within 4 weeks)."*
 
-### 4.5 Known Limitations & Future Improvements
+#### **Generated Executive Analyst Briefing (`match_summary`)**:
+> *"Supplier Titanium & Alloy Works matches 94% because they offer Certified Aerospace Grade Aluminum 6061-T6 / 7075 Extrusion Billets with strong technical alignment to your Aerospace Grade 6061-T6 Aluminum Billets (extrusion ready) requirement, and benefits from co-location in Hyderabad, Telangana, India. All operational, budgetary, and delivery constraints align exceptionally well with your specifications."*
+
+### 4.5 Two-Sentence Executive Analyst Summary & Caveat Isolation Algorithm
+
+While `match_reason` provides an itemized technical checklist, executive decision-makers require a concise, natural-language briefing that immediately surfaces both capability alignment and commercial risks. The matching engine generates a synthesized 2-sentence executive summary (`match_summary`) computed via the following deterministic algorithm:
+
+1. **Sentence 1 — Alignment Synthesis & Capability Fit**:
+   - Classifies semantic overlap into qualitative tiers:
+     - $\text{sem\_score} \ge 0.75 \implies$ `"strong technical alignment"`
+     - $0.50 \le \text{sem\_score} < 0.75 \implies$ `"moderate capability overlap"`
+     - $\text{sem\_score} < 0.50 \implies$ `"partial technical alignment"`
+   - Appends co-location recognition if $\text{loc\_score} = 1.0$ (*", and benefits from co-location in {location}"*).
+   - Combines these attributes into an active sentence stating the match percentage, offered capability, and alignment tier.
+
+2. **Sentence 2 — Caveat Isolation (< 0.75 Threshold)**:
+   - Examines all 6 sub-scores (`delivery`, `budget`, `quantity`, `location`, `category`, `semantic`).
+   - Filters candidate caveats strictly below the **0.75 threshold**:
+     $$\text{Caveat Candidates} = \{ (c, S_c) \mid S_c < 0.75 \}$$
+   - If candidates exist, isolates the **single weakest sub-score** $\min(S_c)$ and generates targeted analytical guidance:
+     - **Delivery ($S_{\text{del}} < 0.75$)**: *"However, their delivery capability ({delivery}) runs longer than your requested timeline ({timeline})."*
+     - **Budget ($S_{\text{bud}} < 0.75$)**: *"However, their quoted unit pricing results in a total project cost exceeding your stated budget."*
+     - **Quantity ($S_{\text{qty}} < 0.75$)**: *"However, their available capacity ({available} units) covers only part of your required volume ({required} units)."*
+     - **Location ($S_{\text{loc}} < 0.75$)**: *"However, their facility in {supplier location} is geographically distant from your location in {client location}."*
+     - **Category ($S_{\text{cat}} < 0.75$)**: *"However, their primary industry category ({supplier cat}) differs from your specified category ({client cat})."*
+     - **Semantic ($S_{\text{sem}} < 0.75$)**: *"However, catalog capabilities show only moderate overlap with your exact custom specifications."*
+   - If all sub-scores are $\ge 0.75$, the second sentence reinforces commercial viability:
+     > *"All operational, budgetary, and delivery constraints align exceptionally well with your specifications."*
+
+### 4.6 Supplier Trust & Verification Badging System
+
+To reduce supplier qualification friction, the platform incorporates a structured verification and credential audit system:
+
+1. **Schema Additions (`suppliers` table)**:
+   - `verification_status` (`VARCHAR(50)`): Audit status (`verified`, `premium`, or `unverified`).
+   - `certifications` (`TEXT`): Industry standards and audit credentials (e.g., `"AS9100D, ISO 9001:2015, IATF 16949"`).
+2. **Visual Hierarchy & Trust Badges**:
+   - **Verified Supplier**: Rendered with a green badge chip and `CheckCircle2` icon.
+   - **Premium Verified Supplier**: Rendered with a gold/amber badge chip and `ShieldCheck` icon.
+   - **Certification Hover Tooltips**: Badges feature interactive hover tooltips displaying the supplier's exact audit credentials.
+3. **Buyer Decision Support**: Verification badges appear across match ranking cards, supplier profiles, and the admin match audit table, giving procurement teams immediate visibility into vendor compliance.
+
+### 4.7 Known Limitations & Future Improvements
 
 1. **Free-Text Timeline Parsing**: The current engine uses regex heuristics (`parse_timeline_to_days`) to extract numerical days from strings like `"within 3 weeks"` or `"ships in 5-7 business days"`. Unconventional phrasing defaults to a neutral score of $0.70$.
    - *Future improvement*: Require structured integer fields (`lead_time_days`) at form input while retaining a natural language parser as a secondary fallback.
@@ -191,7 +240,7 @@ $$\begin{aligned}
 3. **In-Memory Embedding Cache**: Embeddings are computed with an in-process LRU cache. In a distributed multi-worker configuration, cache misses would duplicate embedding computation.
    - *Future improvement*: Persist embedding vectors directly in PostgreSQL using the `pgvector` extension and perform indexing using HNSW (Hierarchical Navigable Small World) for sub-millisecond retrieval across millions of rows.
 
-### 4.6 Design Alternatives Considered
+### 4.8 Design Alternatives Considered
 
 During the design of the matching architecture, several alternative approaches were evaluated. The choices made reflect pragmatic engineering tradeoffs appropriate for an early-stage platform:
 
@@ -234,18 +283,19 @@ The FastAPI backend exposes versioned, RESTful endpoints under `/api`. All endpo
 - `DELETE /api/clients/{client_id}` — Soft/hard delete client and cascade-remove associated match rows.
 
 #### 3. Suppliers
-- `POST /api/suppliers/` — Register a new supplier capability offering.
+- `POST /api/suppliers/` — Register a new supplier capability offering (supports `verification_status` and `certifications`).
 - `GET /api/suppliers/` — Paginated list of suppliers with optional search and category filters.
-- `GET /api/suppliers/{supplier_id}` — Retrieve detailed profile and capability metrics for a supplier.
-- `PUT /api/suppliers/{supplier_id}` — Update supplier catalog parameters, capacity, and pricing.
+- `GET /api/suppliers/{supplier_id}` — Retrieve detailed profile, capability metrics, audit verification status, and certifications for a supplier.
+- `PUT /api/suppliers/{supplier_id}` — Update supplier catalog parameters, capacity, pricing, verification status, and certifications.
 - `DELETE /api/suppliers/{supplier_id}` — Delete supplier profile and associated match relations.
 
 #### 4. Matching Engine & Matches
-- `POST /api/matching/run/{client_id}` — Trigger AI matching for a specific client requirement against all suppliers.
+- `POST /api/matching/run/{client_id}` — Trigger AI matching for a specific client requirement against all suppliers, or for a supplier against all clients.
+- `POST /api/matching/run-supplier/{supplier_id}` — Dedicated endpoint to trigger AI matching for a specific supplier offering against all client requirements.
 - `POST /api/matching/run-all` — Batch run matching engine across all clients and suppliers in the database.
-- `GET /api/matches` — Paginated list of all stored matches with client, supplier, score, and status filters.
-- `GET /api/matches/export` — CSV export of all matches with current filters applied.
-- `GET /api/matches/{match_id}` — Retrieve detailed match record including all 6 component sub-scores and plain-English justification.
+- `GET /api/matches` — Paginated list of all stored matches with filters (`client_id`, `supplier_id`, `status`, `min_score`) and server-side sorting (`sort_by`: `match_score` or `created_at`, `sort_order`: `asc` or `desc`).
+- `GET /api/matches/export` — Streamed CSV export of all filtered matches with 13 comprehensive columns (names, category, composite score, all 6 sub-scores, status, reason, and timestamps).
+- `GET /api/matches/{match_id}` — Retrieve detailed match record including all 6 component sub-scores, plain-English justification (`match_reason`), and executive analyst briefing (`match_summary`).
 - `PATCH /api/matches/{match_id}/status` — Update match disposition status (`pending`, `accepted`, `rejected`).
 
 #### 5. Notifications
@@ -260,9 +310,9 @@ The FastAPI backend exposes versioned, RESTful endpoints under `/api`. All endpo
 - `GET /api/dashboard/clients/{client_id}` — Consolidated dashboard payload for buyer view (active requirement, matches, stats).
 - `GET /api/dashboard/suppliers/{supplier_id}` — Consolidated dashboard payload for supplier view (leads, conversion rate).
 - `GET /api/dashboard/category-breakdown` — Distribution of clients, suppliers, and matches grouped by industrial category.
-- `GET /api/dashboard/recent-activity` — Audit log stream of latest platform creations, match runs, and status updates.
-- `GET /api/dashboard/score-trend` — Average match score over time, grouped by day.
-- `GET /api/dashboard/score-effectiveness` — Acceptance rate by score band, validating whether match scores correlate with real accept/reject decisions.
+- `GET /api/dashboard/recent-activity` — Audit log stream of latest platform creations, match runs, and status updates (with max limit constraints).
+- `GET /api/dashboard/score-trend` — Average match score over time and daily match counts grouped by day (`days` lookback parameter).
+- `GET /api/dashboard/score-effectiveness` — Acceptance rate calibration grouped across descending score bands (`90-100`, `80-89`, `70-79`, `60-69`, `50-59`, `40-49`), computing empirical conversion rates $\frac{\text{accepted}}{\text{accepted} + \text{rejected}}$ to validate scoring quality against human buyer decisions.
 
 ---
 
@@ -391,16 +441,17 @@ pytest -v
 
 ### Test Suite Summary
 
-- **Total Tests**: **50 automated tests**
-- **Test Status**: **50 passed (100%)** in ~28 seconds
+- **Total Tests**: **58 automated tests**
+- **Test Status**: **58 passed (100%)** in ~22 seconds
 - **Test Coverage Breakdown**:
   - **`tests/test_matching_engine.py` (8 tests)**: Validates sentence transformer semantic differentiation, category exact matching, city/region location parsing, quantity capacity tiers, budget linear decay calculations, timeline regex parsing, and database transaction integration.
+  - **`tests/test_match_summary.py` (5 tests)**: Validates 2-sentence executive summary generation, caveat threshold triggers (< 0.75) for delivery, budget, quantity, location, category, and semantic overlap, positive closing sentences when all sub-scores are strong ($\ge 0.75$), and integration into `compute_match` payload.
   - **`tests/test_api_hardening.py` (7 tests)**: Validates strict `{ items, total, limit, offset, has_more }` pagination envelopes, max page limit enforcement (rejecting limits $>100$ with HTTP 422), 404 handler envelopes for invalid UUIDs, and Pydantic validation error structures.
   - **`tests/test_clients.py` (9 tests)**: Full CRUD cycle for clients, required field validation, category filtering, and pagination offsets.
-  - **`tests/test_suppliers.py` (9 tests)**: Full CRUD cycle for suppliers, price/quantity boundary tests, and category filtering.
-  - **`tests/test_matches_api.py` (4 tests)**: Single client matching API, batch match runner, preservation of user-accepted/rejected statuses during background rescoring, and CSV export endpoint verification.
-  - **`tests/test_notifications.py` (3 tests)**: Verifies dual notifications created upon match generation (one for client, one for supplier), notification deduplication on re-matching, unread counters, and mark-as-read endpoints.
-  - **`tests/test_dashboard.py` (8 tests)**: Executive summary statistics, role-filtered dashboard views, category aggregations, recent audit activity streams, plus 3 new analytics validation tests covering daily average match score trends over time (`/api/dashboard/score-trend`), acceptance rate calibration grouped across descending score bands (`/api/dashboard/score-effectiveness`), and edge-case handling when zero decided matches exist.
+  - **`tests/test_suppliers.py` (10 tests)**: Full CRUD cycle for suppliers, price/quantity boundary tests, category filtering, and persistence/retrieval of `verification_status` and `certifications`.
+  - **`tests/test_matches_api.py` (5 tests)**: Single client matching API, supplier-driven matching API (`/run-supplier/{supplier_id}`), batch match runner, preservation of user-accepted/rejected statuses during background rescoring, and RFC-4180 CSV export endpoint verification with 13 required columns.
+  - **`tests/test_notifications.py` (4 tests)**: Verifies dual notifications created upon match generation (one for client, one for supplier), notification deduplication on re-matching, unread counters, and mark-as-read / mark-all-read endpoints.
+  - **`tests/test_dashboard.py` (8 tests)**: Executive summary statistics, role-filtered dashboard views, category aggregations, recent audit activity streams with pagination limits, daily average match score trends over time (`/api/dashboard/score-trend`), acceptance rate calibration grouped across descending score bands (`/api/dashboard/score-effectiveness`), and edge-case handling when zero decided matches exist.
   - **`tests/test_health.py` (2 tests)**: Root landing endpoint and health check diagnostics verifying database connection and embedding model loading.
 
 ---
@@ -444,54 +495,55 @@ wisdom/
 │
 ├── backend/                        # FastAPI Python REST API & AI Engine
 │   ├── alembic/                    # Database migration environment
-│   │   ├── versions/               # Schema migration versions (0001 to 0003)
+│   │   ├── versions/               # Schema migrations (0001 to 0004_supplier_badge_summary)
 │   │   └── env.py                  # Alembic migration runner configuration
 │   ├── app/
 │   │   ├── crud/                   # Database query repositories
 │   │   │   ├── client.py           # Client CRUD operations
-│   │   │   ├── dashboard.py        # Analytics SQL aggregations
-│   │   │   ├── match.py            # Match upsert & query logic
+│   │   │   ├── dashboard.py        # Analytics SQL aggregations (score trend & quality calibration)
+│   │   │   ├── match.py            # Match upsert, sorting, & CSV export query logic
 │   │   │   ├── notification.py     # Notification query & mark-read
-│   │   │   └── supplier.py         # Supplier catalog CRUD operations
+│   │   │   └── supplier.py         # Supplier catalog CRUD operations (with verification)
 │   │   ├── models/                 # SQLAlchemy 2.0 ORM domain models
 │   │   │   ├── client.py           # Buyer requirements table schema
-│   │   │   ├── match.py            # Match pairs, sub-scores, and status schema
+│   │   │   ├── match.py            # Match pairs, sub-scores, status, & match_summary schema
 │   │   │   ├── notification.py     # In-app notifications schema
-│   │   │   └── supplier.py         # Supplier capabilities table schema
+│   │   │   └── supplier.py         # Supplier capabilities, verification_status & certifications
 │   │   ├── routers/                # FastAPI HTTP routing controllers
 │   │   │   ├── clients.py          # /api/clients endpoints
-│   │   │   ├── dashboard.py        # /api/dashboard endpoints
+│   │   │   ├── dashboard.py        # /api/dashboard endpoints (trend & effectiveness)
 │   │   │   ├── health.py           # /api/health endpoint
-│   │   │   ├── matches.py          # /api/matches endpoints
-│   │   │   ├── matching.py         # /api/matching engine endpoints
+│   │   │   ├── matches.py          # /api/matches endpoints (sortable listing & CSV export)
+│   │   │   ├── matching.py         # /api/matching engine (client & supplier triggers)
 │   │   │   ├── notifications.py    # /api/notifications endpoints
 │   │   │   └── suppliers.py        # /api/suppliers endpoints
 │   │   ├── schemas/                # Pydantic v2 validation & response contracts
 │   │   │   ├── client.py           # Client request/response schemas
 │   │   │   ├── common.py           # Pagination envelopes & error models
-│   │   │   ├── dashboard.py        # Aggregation view schemas
-│   │   │   ├── match.py            # Match & sub-score schemas
+│   │   │   ├── dashboard.py        # Aggregation view schemas (ScoreTrendItem, ScoreBandEffectiveness)
+│   │   │   ├── match.py            # Match & sub-score schemas (includes match_summary)
 │   │   │   ├── notification.py     # Notification schemas
-│   │   │   └── supplier.py         # Supplier request/response schemas
+│   │   │   └── supplier.py         # Supplier schemas (includes verification_status & certifications)
 │   │   ├── seed/                   # Demonstration & evaluation fixtures
-│   │   │   └── seed_data.py        # Populates 9 clients, 9 suppliers, triggers matching
+│   │   │   └── seed_data.py        # Populates 16 clients, 15 suppliers, triggers matching
 │   │   ├── services/               # Core business & computation services
-│   │   │   ├── matching_engine.py  # Hybrid AI engine (embeddings + business scoring)
+│   │   │   ├── matching_engine.py  # Hybrid AI engine (embeddings + business scoring + 2-sentence summary)
 │   │   │   └── notification_service.py # Provider-based notification dispatcher
 │   │   ├── config.py               # Pydantic BaseSettings environment configurations
 │   │   ├── database.py             # SQLAlchemy engine & session factory
 │   │   └── main.py                 # FastAPI application factory & middleware setup
-│   ├── tests/                      # Automated Pytest suite (50 passing tests)
+│   ├── tests/                      # Automated Pytest suite (58 passing tests)
 │   │   ├── conftest.py             # Isolated SQLite/Postgres test fixtures
 │   │   ├── test_api_hardening.py   # Pagination envelope & error handling tests
 │   │   ├── test_clients.py         # Client CRUD & validation tests
-│   │   ├── test_dashboard.py       # Analytics dashboard tests
+│   │   ├── test_dashboard.py       # Analytics dashboard tests (trends & effectiveness)
 │   │   ├── test_health.py          # Health check & version tests
-│   │   ├── test_matches_api.py     # Match API & status preservation tests
+│   │   ├── test_match_summary.py   # Executive analyst summary & caveat threshold tests
+│   │   ├── test_matches_api.py     # Match API, supplier runs, sorting & CSV export tests
 │   │   ├── test_matching_engine.py # Sub-score math & embedding tests
 │   │   ├── test_notifications.py   # In-app notification creation & deduplication tests
-│   │   └── test_suppliers.py       # Supplier CRUD & validation tests
-│   ├── demo_simulation.py          # Demo data simulator — assigns realistic accept/reject decisions across score bands for dashboard validation
+│   │   └── test_suppliers.py       # Supplier CRUD & verification status tests
+│   ├── demo_simulation.py          # Demo data simulator — assigns realistic accept/reject decisions across score bands for dashboard calibration & verifies CSV export
 │   ├── Dockerfile                  # Production-ready backend container image
 │   ├── requirements.txt            # Pinned Python dependencies
 │   └── alembic.ini                 # Alembic configuration
@@ -501,15 +553,17 @@ wisdom/
     ├── src/
     │   ├── components/             # Reusable UI widgets & feature views
     │   │   ├── ui/                 # Radix UI primitives (dialogs, tabs, dropdowns)
-    │   │   ├── admin-dashboard.tsx # Executive overview & telemetry widgets
-    │   │   ├── app-shell.tsx       # Navigation bar, notification bell, role switcher
-    │   │   ├── match-dashboard.tsx # Match cards, radial score badges, breakdowns
+    │   │   ├── admin-dashboard.tsx # Executive overview, Recharts score trend, calibration matrix & CSV export
+    │   │   ├── app-shell.tsx       # Navigation bar, notification bell, workspace switcher & auto-heal
+    │   │   ├── match-dashboard.tsx # Match cards, radial score badges, executive summary & run matching
+    │   │   ├── matchmaking-progress-modal.tsx # Multi-stage animated AI matchmaking execution modal
+    │   │   ├── verified-badge.tsx  # Tiered supplier trust badge (Verified / Premium) with certification tooltip
     │   │   ├── profile-form.tsx    # Dynamic requirement & offering forms
     │   │   └── states.tsx          # Loading skeletons & empty state placeholders
     │   ├── hooks/                  # Custom React hooks (mobile detection, media queries)
     │   ├── lib/                    # Utilities, formatters, and API client
-    │   │   ├── api.ts              # Type-safe Fetch wrapper with error handling
-    │   │   ├── format.ts           # Currency, date, and score formatters
+    │   │   ├── api.ts              # Type-safe Fetch wrapper with error handling & export
+    │   │   ├── format.ts           # Currency (INR ₹), date, and score formatters
     │   │   └── utils.ts            # ClassName merging helper (clsx + tailwind-merge)
     │   ├── routes/                 # TanStack file-based routes
     │   │   ├── __root.tsx          # Root layout with AppShell and Toast providers
