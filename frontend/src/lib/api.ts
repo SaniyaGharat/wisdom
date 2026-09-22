@@ -150,7 +150,7 @@ export const api = {
   getCategoryBreakdown: () => request<CategoryBreakdownItem[] | ListEnvelope<CategoryBreakdownItem> | Record<string, number>>("/api/dashboard/category-breakdown"),
   getRecentActivity: () => request<ListEnvelope<Record<string, unknown>>>("/api/dashboard/recent-activity"),
   getMatches: (params: URLSearchParams) => request<ListEnvelope<Match>>(`/api/matches?${params.toString()}`),
-  getScoreTrend: (days = 30) => request<ScoreTrendItem[]>(`/api/dashboard/score-trend?days=${days}`),
+  getScoreTrend: (days = 7) => request<ScoreTrendItem[]>(`/api/dashboard/score-trend?days=${days}`),
   getScoreEffectiveness: () => request<ScoreBandEffectiveness[]>("/api/dashboard/score-effectiveness"),
   exportMatchesCsv: (params?: URLSearchParams) => {
     const query = params ? `?${params.toString()}` : "";

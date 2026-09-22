@@ -84,14 +84,76 @@ export function AdminDashboard() {
   const [page, setPage] = useState(0);
   const [running, setRunning] = useState(false);
   const [expandedRows, setExpandedRows] = useState<Set<string | number>>(new Set());
+  const [trendDays, setTrendDays] = useState<number>(7);
   const limit = 10;
   const params = useMemo(() => { const p = new URLSearchParams({ limit: String(limit), offset: String(page * limit), sort_by: "match_score", sort_order: sort }); if (status) p.set("status", status); if (minScore) p.set("min_score", String(minScore)); return p; }, [status, minScore, sort, page]);
   const summary = useQuery({ queryKey: ["summary"], queryFn: api.getSummary, retry: 1 });
   const categories = useQuery({ queryKey: ["categories"], queryFn: api.getCategoryBreakdown, retry: 1 });
   const activity = useQuery({ queryKey: ["activity"], queryFn: api.getRecentActivity, retry: 1 });
   const matches = useQuery({ queryKey: ["matches", params.toString()], queryFn: () => api.getMatches(params), retry: 1 });
-  const scoreTrend = useQuery({ queryKey: ["score-trend"], queryFn: () => api.getScoreTrend(30), retry: 1 });
+  const scoreTrend = useQuery({ queryKey: ["score-trend", trendDays], queryFn: () => api.getScoreTrend(trendDays), retry: 1 });
   const scoreEffectiveness = useQuery({ queryKey: ["score-effectiveness"], queryFn: api.getScoreEffectiveness, retry: 1 });
+
+  /* ── Week divided based on day data mapping ──────────────────── */
+  const dailyTrendData = useMemo(() => {
+    if (!scoreTrend.data) return [];
+    const map = new Map<string, { average_score: number; match_count: number }>();
+    scoreTrend.data.forEach((item) => {
+      map.set(item.date, {
+        average_score: Number(item.average_score),
+        match_count: Number(item.match_count),
+      });
+    });
+
+    const result: Array<{
+      date: string;
+      dayOfWeek: string;
+      shortDay: string;
+      displayLabel: string;
+      fullDateLabel: string;
+      average_score: number | null;
+      match_count: number;
+      isToday: boolean;
+    }> = [];
+
+    // Project launched on Saturday, 19 Sept 2026 - do not display days prior to launch
+    const PROJECT_START_DATE = "2026-09-19";
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const daysCount = trendDays;
+    for (let i = daysCount - 1; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(today.getDate() - i);
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, "0");
+      const dayNum = String(d.getDate()).padStart(2, "0");
+      const dateStr = `${year}-${month}-${dayNum}`;
+
+      // Strictly discard any days before Saturday launch
+      if (dateStr < PROJECT_START_DATE) {
+        continue;
+      }
+
+      const match = map.get(dateStr);
+      const dayOfWeek = d.toLocaleDateString("en-IN", { weekday: "short" });
+      const monthDay = d.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+      const isToday = i === 0;
+
+      result.push({
+        date: dateStr,
+        dayOfWeek,
+        shortDay: `${dayOfWeek} ${d.getDate()}`,
+        displayLabel: `${dayOfWeek}, ${monthDay}`,
+        fullDateLabel: d.toLocaleDateString("en-IN", { weekday: "long", year: "numeric", month: "long", day: "numeric" }),
+        average_score: match ? match.average_score : null,
+        match_count: match ? match.match_count : 0,
+        isToday,
+      });
+    }
+
+    return result;
+  }, [scoreTrend.data, trendDays]);
   const stats = summary.data;
   const bars: Array<{ name: string; count: number; score?: number }> = useMemo(() => {
     if (!categories.data) return [];
@@ -153,10 +215,15 @@ export function AdminDashboard() {
 
     {/* ── PART B: Score Trend Chart ──────────────────────────────── */}
     <section className="mt-10">
-      <div className="section-heading">
+      <div className="section-heading flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="flex items-center gap-2"><TrendingUp className="size-5 text-primary" /> Match score trend</h2>
-          <p>Average match score over the last 30 days.</p>
+          <p>Average match score divided by day starting from Saturday launch (19 Sept).</p>
+        </div>
+        <div className="flex items-center gap-1 rounded-lg border border-border/60 bg-muted/30 p-1 text-xs">
+          <span className="rounded bg-primary text-primary-foreground px-3 py-1 font-medium shadow-xs">
+            From Saturday (19 Sept – Today)
+          </span>
         </div>
       </div>
       <div className="panel" style={{ minHeight: 280 }}>
@@ -164,47 +231,98 @@ export function AdminDashboard() {
           <div className="skeleton h-56" />
         ) : scoreTrend.isError ? (
           <ErrorState message={scoreTrend.error.message} />
-        ) : !scoreTrend.data || scoreTrend.data.length === 0 ? (
+        ) : !dailyTrendData || dailyTrendData.length === 0 ? (
           <p className="empty-copy">No trend data available yet.</p>
         ) : (
-          <ResponsiveContainer width="100%" height={240}>
-            <LineChart data={scoreTrend.data} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 6" stroke="var(--border)" />
-              <XAxis
-                dataKey="date"
-                tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
-                tickFormatter={(d: string) => {
-                  const dt = new Date(d + "T00:00:00");
-                  return dt.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
-                }}
-              />
-              <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} width={36} />
-              <RechartsTooltip
-                contentStyle={{
-                  background: "var(--card)",
-                  border: "1px solid var(--border)",
-                  borderRadius: "var(--radius-md)",
-                  fontSize: 13,
-                }}
-                labelFormatter={(d: string) => {
-                  const dt = new Date(d + "T00:00:00");
-                  return dt.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
-                }}
-                formatter={(v: number, name: string) => [
-                  `${v.toFixed(1)}%`,
-                  name === "average_score" ? "Avg score" : name,
-                ]}
-              />
-              <Line
-                type="monotone"
-                dataKey="average_score"
-                stroke="var(--primary)"
-                strokeWidth={2.5}
-                dot={{ r: 4, fill: "var(--sage)", stroke: "var(--primary)", strokeWidth: 2 }}
-                activeDot={{ r: 6 }}
-              />
-            </LineChart>
-          </ResponsiveContainer>
+          <>
+            <ResponsiveContainer width="100%" height={240}>
+              <LineChart data={dailyTrendData} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 6" stroke="var(--border)" />
+                <XAxis
+                  dataKey="shortDay"
+                  tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
+                />
+                <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} width={36} />
+                <RechartsTooltip
+                  contentStyle={{
+                    background: "var(--card)",
+                    border: "1px solid var(--border)",
+                    borderRadius: "var(--radius-md)",
+                    fontSize: 13,
+                  }}
+                  labelFormatter={(_label, payload) => {
+                    const item = payload?.[0]?.payload;
+                    return item?.fullDateLabel || _label;
+                  }}
+                  formatter={(v: any, name: string, item: any) => {
+                    const matchCount = item?.payload?.match_count ?? 0;
+                    return [
+                      v != null ? `${Number(v).toFixed(1)}% (${matchCount} ${matchCount === 1 ? "match" : "matches"})` : `No matches (0)`,
+                      name === "average_score" ? "Avg score" : name,
+                    ];
+                  }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="average_score"
+                  stroke="var(--primary)"
+                  strokeWidth={2.5}
+                  connectNulls={true}
+                  dot={{ r: 4, fill: "var(--sage)", stroke: "var(--primary)", strokeWidth: 2 }}
+                  activeDot={{ r: 6 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+
+            {/* Daily breakdown strip from Saturday launch */}
+            <div className="mt-5 border-t border-border/50 pt-4">
+              <div className="mb-2.5 flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Day-by-Day Breakdown (From Saturday Launch)
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {dailyTrendData.reduce((acc, d) => acc + d.match_count, 0)} total matches recorded
+                </span>
+              </div>
+              <div className="grid gap-2.5 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7">
+                {dailyTrendData.map((day) => {
+                  const hasScore = day.average_score !== null;
+                  return (
+                    <div
+                      key={day.date}
+                      className={`flex flex-col rounded-lg border p-2.5 transition-all ${
+                        day.isToday
+                          ? "border-primary/50 bg-primary/10 shadow-xs"
+                          : "border-border/60 bg-muted/20 hover:border-border"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-semibold text-foreground">{day.dayOfWeek}</span>
+                        <span className="text-[11px] text-muted-foreground">{new Date(day.date + "T00:00:00").getDate()} {new Date(day.date + "T00:00:00").toLocaleDateString("en-IN", { month: "short" })}</span>
+                      </div>
+                      <div className="mt-2">
+                        {hasScore ? (
+                          <span className="font-mono text-base font-bold text-foreground">
+                            {day.average_score?.toFixed(1)}%
+                          </span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground/60">—</span>
+                        )}
+                      </div>
+                      <div className="mt-1 flex items-center justify-between text-[11px] text-muted-foreground">
+                        <span>{day.match_count} {day.match_count === 1 ? "match" : "matches"}</span>
+                        {day.isToday && (
+                          <span className="rounded bg-primary/20 px-1 py-0.2 text-[9px] font-semibold text-primary">
+                            TODAY
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </>
         )}
       </div>
     </section>

@@ -239,7 +239,7 @@ def get_recent_activity(db: Session, limit: int = 20) -> List[Dict[str, Any]]:
     return activities[:limit]
 
 
-def get_score_trend(db: Session, days: int = 30) -> List[Dict[str, Any]]:
+def get_score_trend(db: Session, days: int = 7) -> List[Dict[str, Any]]:
     """
     Calculate daily average match score and match volume for the past N days.
     """

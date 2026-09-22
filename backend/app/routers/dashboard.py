@@ -123,7 +123,7 @@ def get_recent_activity(
     response_description="Chronological series of daily match score averages and counts",
 )
 def get_score_trend(
-    days: int = Query(30, ge=1, le=365, description="Number of days to look back"),
+    days: int = Query(7, ge=1, le=365, description="Number of days to look back"),
     db: Session = Depends(get_db),
 ):
     """
