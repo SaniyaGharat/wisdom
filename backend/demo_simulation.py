@@ -98,6 +98,8 @@ for i, m in enumerate(matches_env["items"], 1):
     safe_print(f"    Breakdown => Semantic: {m.get('semantic_score', 0)*100:.1f}% | Category: {m.get('category_score', 0)*100:.0f}% | Budget: {m.get('budget_score', 0)*100:.0f}% | Location: {m.get('location_score', 0)*100:.0f}%")
     reason = m.get("match_reason", "N/A")
     safe_print(f"    AI Reason: \"{reason}\"")
+    summary = m.get("match_summary", "N/A")
+    safe_print(f"    AI Summary: \"{summary}\"")
 
 # 4. Realistic Match Decision Simulation
 # Assign realistic accepted / rejected / pending statuses across score bands

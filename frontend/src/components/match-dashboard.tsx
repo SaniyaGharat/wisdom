@@ -8,6 +8,8 @@ import { formatRupees, formatRupeeText } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { EmptyState, ErrorState, PageSkeleton } from "@/components/states";
 import { NotificationBell } from "@/components/app-shell";
+import { VerifiedBadge } from "@/components/verified-badge";
+import { MatchmakingProgressModal } from "@/components/matchmaking-progress-modal";
 
 const scoreKeys = [["semantic_score", "Semantic"], ["category_score", "Category"], ["location_score", "Location"], ["quantity_score", "Quantity"], ["budget_score", "Budget"], ["delivery_score", "Delivery"]] as const;
 const text = (value: unknown, fallback = "Not provided") => typeof value === "string" || typeof value === "number" ? String(value) : fallback;
@@ -165,13 +167,22 @@ export function MatchDashboard({ kind, id }: { kind: "client" | "supplier"; id: 
             </select>
           )}
         </div>
-        <h1 className="page-title mt-2">Matches for {name}</h1>
+        <div className="mt-2 flex flex-wrap items-center gap-2.5">
+          <h1 className="page-title">Matches for {name}</h1>
+          {kind === "supplier" && (
+            <VerifiedBadge
+              status={String(profile["verification_status"] ?? "")}
+              certifications={String(profile["certifications"] ?? "")}
+            />
+          )}
+        </div>
       </div>
       <div className="flex gap-2">
         <NotificationBell />
         <Button onClick={rerun} disabled={running}><Sparkles />{running ? "Matching…" : "Find matches"}</Button>
       </div>
     </div>
+    <MatchmakingProgressModal isOpen={running} title={`Finding Matches for ${name}`} />
     <section className="requirement-strip">
       <div>
         <p className="text-xs font-bold uppercase text-muted-foreground">Your {kind === "client" ? "requirement" : "offer"}</p>
@@ -211,8 +222,10 @@ function MatchCard({ match, rank, counterpart, pendingAction, resolvedStatus, on
   const matchReason = formatRupeeText(text(match.match_reason ?? match.reason, "This profile shares relevant requirements and capabilities with yours."));
   const counterpartPricing = nested["pricing_details"] ? formatRupeeText(String(nested["pricing_details"])) : undefined;
   const counterpartBudget = nested["budget"] != null ? formatRupees(nested["budget"] as number | string) : undefined;
+  const supplierStatus = String(match.supplier?.verification_status ?? nested["verification_status"] ?? "");
+  const supplierCerts = String(match.supplier?.certifications ?? nested["certifications"] ?? "");
 
-  return <article className="match-card"><div className="flex flex-col gap-5 md:flex-row md:items-start"><div className="flex flex-1 gap-4"><span className="rank-mark">{rank}</span><div><div className="flex flex-wrap items-center gap-2"><h3 className="font-display text-xl font-semibold">{name}</h3><span className={`status-badge ${effectiveStatus === "accepted" ? "status-accepted" : effectiveStatus === "rejected" ? "status-rejected" : ""}`}>{statusLabel(effectiveStatus)}</span></div><p className="mt-1 text-sm font-medium text-primary">{category}</p><p className="mt-2 flex items-center gap-1 text-sm text-muted-foreground"><MapPin className="size-4" />{location}</p>{counterpartPricing && <p className="mt-1 text-xs font-medium text-muted-foreground">Pricing: {counterpartPricing}</p>}{counterpartBudget && <p className="mt-1 text-xs font-medium text-muted-foreground">Budget: {counterpartBudget}</p>}<p className="mt-4 max-w-3xl text-sm leading-6 text-muted-foreground">{matchReason}</p></div></div><div className={`score-badge ${tone}`}><strong>{Math.round(score)}%</strong><span>match</span></div></div>
+  return <article className="match-card"><div className="flex flex-col gap-5 md:flex-row md:items-start"><div className="flex flex-1 gap-4"><span className="rank-mark">{rank}</span><div><div className="flex flex-wrap items-center gap-2"><h3 className="font-display text-xl font-semibold">{name}</h3>{counterpart === "supplier" && <VerifiedBadge status={supplierStatus} certifications={supplierCerts} />}<span className={`status-badge ${effectiveStatus === "accepted" ? "status-accepted" : effectiveStatus === "rejected" ? "status-rejected" : ""}`}>{statusLabel(effectiveStatus)}</span></div><p className="mt-1 text-sm font-medium text-primary">{category}</p><p className="mt-2 flex items-center gap-1 text-sm text-muted-foreground"><MapPin className="size-4" />{location}</p>{counterpartPricing && <p className="mt-1 text-xs font-medium text-muted-foreground">Pricing: {counterpartPricing}</p>}{counterpartBudget && <p className="mt-1 text-xs font-medium text-muted-foreground">Budget: {counterpartBudget}</p>}{match.match_summary ? (<div className="mt-4 max-w-3xl rounded-xl border border-primary/25 bg-sage/20 p-4 text-sm leading-relaxed text-foreground shadow-2xs dark:bg-card"><div className="mb-1.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-primary"><Sparkles className="size-3.5" /><span>AI Match Summary</span></div><p className="font-medium text-foreground/90 italic">"{match.match_summary}"</p></div>) : (<p className="mt-4 max-w-3xl text-sm leading-6 text-muted-foreground">{matchReason}</p>)}</div></div><div className={`score-badge ${tone}`}><strong>{Math.round(score)}%</strong><span>match</span></div></div>
     <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
       <Button variant="ghost" onClick={() => setOpen((value) => !value)}>Score details <ChevronDown className={`transition-transform ${open ? "rotate-180" : ""}`} /></Button>
       <div className="flex gap-2">
@@ -228,6 +241,6 @@ function MatchCard({ match, rank, counterpart, pendingAction, resolvedStatus, on
         )}
       </div>
     </div>
-    {open && <div className="mt-4 grid gap-3 rounded-md bg-muted p-4 sm:grid-cols-2 lg:grid-cols-3">{scoreKeys.map(([key, label]) => { const value = normalized(match[key]); return <div key={key}><div className="mb-1 flex justify-between text-xs font-semibold"><span>{label}</span><span>{Math.round(value)}%</span></div><div className="h-2 overflow-hidden rounded-full bg-background"><div className="h-full rounded-full bg-primary" style={{ width: `${Math.min(value, 100)}%` }} /></div></div>; })}</div>}
+    {open && <div className="mt-4 space-y-4 rounded-xl bg-muted p-4"><div><p className="mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">Score component breakdown</p><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{scoreKeys.map(([key, label]) => { const value = normalized(match[key]); return <div key={key}><div className="mb-1 flex justify-between text-xs font-semibold"><span>{label}</span><span>{Math.round(value)}%</span></div><div className="h-2 overflow-hidden rounded-full bg-background"><div className="h-full rounded-full bg-primary" style={{ width: `${Math.min(value, 100)}%` }} /></div></div>; })}</div></div><div className="border-t border-border/60 pt-3"><p className="mb-1 text-xs font-bold uppercase tracking-wider text-muted-foreground">Deterministic Match Criteria</p><p className="text-xs leading-relaxed text-muted-foreground">{matchReason}</p></div></div>}
   </article>;
 }

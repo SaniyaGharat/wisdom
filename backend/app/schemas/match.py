@@ -30,6 +30,11 @@ class MatchBase(BaseModel):
         examples=["Strong semantic alignment on product requirement (82%). Exact category match ('Raw Materials'). Within budget. Regional location alignment."],
         description="Human-readable justification for the match score",
     )
+    match_summary: Optional[str] = Field(
+        None,
+        examples=["Supplier CircuitCraft Microelectronics matches 86% because they offer Turnkey Multilayer PCB Fabrication with strong technical alignment to your custom specifications, and are co-located in Bengaluru. All operational, budgetary, and timeline constraints align exceptionally well with your specifications."],
+        description="Analyst-style 2-sentence narrative summary of the match",
+    )
     status: str = Field("notified", examples=["notified"], description="Match status: pending / notified / accepted / rejected")
 
 

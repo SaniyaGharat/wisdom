@@ -349,6 +349,95 @@ def generate_match_reason(
     return ". ".join(r[0].upper() + r[1:] for r in reasons) + "."
 
 
+def generate_match_summary(
+    client: Client,
+    supplier: Supplier,
+    match_score: float,
+    semantic_score: float,
+    category_score: float,
+    location_score: float,
+    quantity_score: float,
+    budget_score: float,
+    delivery_score: float,
+) -> str:
+    """
+    Generate a natural, analyst-style 2-sentence executive summary.
+    Sentence 1 summarizes core capability and alignment fit.
+    Sentence 2 highlights the single weakest sub-score as an analytical caveat (if < 0.75),
+    or praises overall alignment if all sub-scores are strong (>= 0.75).
+    """
+    score_pct = int(round(match_score))
+    if semantic_score >= 0.75:
+        alignment_text = "strong technical alignment"
+    elif semantic_score >= 0.50:
+        alignment_text = "moderate capability overlap"
+    else:
+        alignment_text = "partial technical alignment"
+
+    co_location = f", and benefits from co-location in {client.location}" if location_score == 1.0 else ""
+    sentence_one = (
+        f"Supplier {supplier.supplier_name} matches {score_pct}% because they offer {supplier.product_offered} "
+        f"with {alignment_text} to your {client.product_requirement} requirement{co_location}."
+    )
+
+    # Evaluate the single weakest commercial/technical sub-score
+    sub_scores = [
+        ("delivery", delivery_score),
+        ("budget", budget_score),
+        ("quantity", quantity_score),
+        ("location", location_score),
+        ("category", category_score),
+        ("semantic", semantic_score),
+    ]
+
+    # Focus on components strictly below absolute threshold of 0.75 (excluding strong matches >= 0.75)
+    caveat_candidates = [(name, val) for name, val in sub_scores if val < 0.75]
+
+    if caveat_candidates:
+        weakest_name, weakest_val = min(caveat_candidates, key=lambda item: item[1])
+        if weakest_name == "delivery":
+            sentence_two = (
+                f"However, their delivery capability ({supplier.delivery_capability}) runs longer than "
+                f"your requested timeline ({client.delivery_timeline})."
+            )
+        elif weakest_name == "budget":
+            sentence_two = (
+                "However, their quoted unit pricing results in a total project cost exceeding your stated budget."
+            )
+        elif weakest_name == "quantity":
+            sentence_two = (
+                f"However, their available capacity ({supplier.available_quantity:,} units) covers only part of "
+                f"your required volume ({client.quantity_required:,} units)."
+            )
+        elif weakest_name == "location":
+            sentence_two = (
+                f"However, their facility in {supplier.location} is geographically distant from your location in {client.location}."
+            )
+        elif weakest_name == "category":
+            sentence_two = (
+                f"However, their primary industry category ({supplier.category}) differs from your specified category ({client.category})."
+            )
+        elif weakest_name == "semantic":
+            if weakest_val < 0.75:
+                sentence_two = (
+                    "However, catalog capabilities show only moderate overlap with your exact custom specifications."
+                )
+            else:
+                sentence_two = (
+                    "All operational, budgetary, and delivery constraints align exceptionally well with your specifications."
+                )
+        else:
+            sentence_two = (
+                "All operational, budgetary, and delivery constraints align exceptionally well with your specifications."
+            )
+    else:
+        sentence_two = (
+            "All operational, budgetary, and delivery constraints align exceptionally well with your specifications."
+        )
+
+    return f"{sentence_one} {sentence_two}"
+
+
 # ---------------------------------------------------------------------------
 # Composite Match Computation & Orchestration
 # ---------------------------------------------------------------------------
@@ -388,6 +477,18 @@ def compute_match(client: Client, supplier: Supplier) -> Dict[str, Any]:
         delivery_score=del_score,
     )
 
+    summary = generate_match_summary(
+        client=client,
+        supplier=supplier,
+        match_score=final_score,
+        semantic_score=sem_score,
+        category_score=cat_score,
+        location_score=loc_score,
+        quantity_score=qty_score,
+        budget_score=bud_score,
+        delivery_score=del_score,
+    )
+
     return {
         "match_score": final_score,
         "semantic_score": sem_score,
@@ -397,6 +498,7 @@ def compute_match(client: Client, supplier: Supplier) -> Dict[str, Any]:
         "budget_score": bud_score,
         "delivery_score": del_score,
         "match_reason": reason,
+        "match_summary": summary,
     }
 
 

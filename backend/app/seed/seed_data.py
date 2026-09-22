@@ -105,6 +105,8 @@ SAMPLE_SUPPLIERS = [
         "location": "Bengaluru, Karnataka, India",
         "delivery_capability": "ships in 10-14 days",
         "additional_notes": "Equipped with automated optical inspection (AOI) and X-ray testing for BGA components.",
+        "verification_status": "verified",
+        "certifications": "ISO 9001, IPC-A-610 Class 3",
     },
     {
         "supplier_name": "OptiVision Optoelectronics",
@@ -115,6 +117,8 @@ SAMPLE_SUPPLIERS = [
         "location": "Mumbai, Maharashtra, India",
         "delivery_capability": "ships in 14-21 days",
         "additional_notes": "Offers complete optical bonding and custom cover glass printing.",
+        "verification_status": "unverified",
+        "certifications": None,
     },
     {
         "supplier_name": "Verde Mills & Weaving",
@@ -125,6 +129,8 @@ SAMPLE_SUPPLIERS = [
         "location": "Chennai, Tamil Nadu, India",
         "delivery_capability": "ships in 7-10 days",
         "additional_notes": "OEKO-TEX Standard 100 certified, zero toxic wastewater discharge facility.",
+        "verification_status": "verified",
+        "certifications": "GOTS Certified, OEKO-TEX Standard 100",
     },
     {
         "supplier_name": "SyntheTech Performance Fabrics",
@@ -135,6 +141,8 @@ SAMPLE_SUPPLIERS = [
         "location": "Surat, Gujarat, India",
         "delivery_capability": "ships in 12-15 days",
         "additional_notes": "High colorfastness to chlorine, UV, and laundering.",
+        "verification_status": "unverified",
+        "certifications": None,
     },
     {
         "supplier_name": "BioShield Packaging Group",
@@ -145,6 +153,8 @@ SAMPLE_SUPPLIERS = [
         "location": "Pune, Maharashtra, India",
         "delivery_capability": "ships in 5-7 business days",
         "additional_notes": "Custom flexographic printing up to 6 colors; tamper-evident adhesive strips.",
+        "verification_status": "verified",
+        "certifications": "ASTM D6400, EN 13432",
     },
     {
         "supplier_name": "Midwest Box & Container Co.",
@@ -155,6 +165,8 @@ SAMPLE_SUPPLIERS = [
         "location": "New Delhi, Delhi, India",
         "delivery_capability": "ships in 5-8 days",
         "additional_notes": "FSC-certified 100% recycled paperboard with moisture-resistant barrier.",
+        "verification_status": "unverified",
+        "certifications": None,
     },
     {
         "supplier_name": "Titanium & Alloy Works",
@@ -165,6 +177,8 @@ SAMPLE_SUPPLIERS = [
         "location": "Hyderabad, Telangana, India",
         "delivery_capability": "ships in 14-20 days",
         "additional_notes": "AS9100D registered facility, full lot traceability and ultrasonic inspection reports included.",
+        "verification_status": "premium",
+        "certifications": "AS9100D, ISO 9001, NADCAP",
     },
     {
         "supplier_name": "Polymer Precision Corp",
@@ -175,6 +189,8 @@ SAMPLE_SUPPLIERS = [
         "location": "Ahmedabad, Gujarat, India",
         "delivery_capability": "ships in 7-12 days",
         "additional_notes": "ISO 13485 cleanroom compound manufacturing with DMF on file.",
+        "verification_status": "verified",
+        "certifications": "ISO 13485, USP Class VI",
     },
 ]
 
@@ -194,9 +210,15 @@ def seed_database(run_matching: bool = True):
             print(f"Database contains {existing_clients} clients and {existing_suppliers} suppliers.")
             user_input = os.getenv("FORCE_SEED", "false").lower()
             if user_input != "true":
-                print("Skipping re-inserting client/supplier rows. (Set FORCE_SEED=true to wipe and re-seed)")
+                print("Updating supplier verification and certifications from sample seed...")
+                for s_data in SAMPLE_SUPPLIERS:
+                    existing_s = db.query(Supplier).filter(Supplier.supplier_name == s_data["supplier_name"]).first()
+                    if existing_s:
+                        existing_s.verification_status = s_data.get("verification_status", "unverified")
+                        existing_s.certifications = s_data.get("certifications")
+                db.commit()
                 if run_matching:
-                    print("Running AI matchmaking engine on existing data...")
+                    print("Running AI matchmaking engine to update match_summary on all records...")
                     match_summary = run_matching_all(db, min_score=40.0)
                     print(f"Matchmaking complete: {match_summary['matches_stored']} matches stored.")
                 return

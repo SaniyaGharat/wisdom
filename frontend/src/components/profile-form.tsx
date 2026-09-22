@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ErrorState, PageSkeleton } from "@/components/states";
+import { MatchmakingProgressModal } from "@/components/matchmaking-progress-modal";
 
 type Kind = "client" | "supplier";
 type Values = Record<string, string>;
@@ -55,6 +56,7 @@ export function ProfileForm({ kind, id }: { kind: Kind; id?: string }) {
   const [loading, setLoading] = useState(Boolean(id));
   const [loadError, setLoadError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [matchingRunning, setMatchingRunning] = useState(false);
   const [createdId, setCreatedId] = useState(id || "");
   const [customCategoryMode, setCustomCategoryMode] = useState(false);
 
@@ -158,6 +160,7 @@ export function ProfileForm({ kind, id }: { kind: Kind; id?: string }) {
   }
 
   async function findMatches() {
+    setMatchingRunning(true);
     setSaving(true);
     try {
       await api.runMatching(createdId);
@@ -167,6 +170,7 @@ export function ProfileForm({ kind, id }: { kind: Kind; id?: string }) {
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Matching could not be started.");
     } finally {
+      setMatchingRunning(false);
       setSaving(false);
     }
   }
@@ -175,6 +179,7 @@ export function ProfileForm({ kind, id }: { kind: Kind; id?: string }) {
   if (loadError) return <ErrorState message={loadError} />;
   return (
     <div className="page-wrap max-w-4xl">
+      <MatchmakingProgressModal isOpen={matchingRunning} title={`Finding Matches for Your ${kind === "client" ? "Requirement" : "Offering"}`} />
       <div className="mb-8 max-w-2xl">
         <span className="eyebrow">{id ? "Update profile" : `New ${kind} profile`}</span>
         <h1 className="page-title mt-3">{config.title}</h1>

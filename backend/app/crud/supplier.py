@@ -53,6 +53,8 @@ def create_supplier(db: Session, *, obj_in: SupplierCreate) -> Supplier:
         location=obj_in.location,
         delivery_capability=obj_in.delivery_capability,
         additional_notes=obj_in.additional_notes,
+        verification_status=obj_in.verification_status,
+        certifications=obj_in.certifications,
     )
     db.add(db_obj)
     db.commit()

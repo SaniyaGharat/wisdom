@@ -5,6 +5,8 @@ import { toast } from "sonner";
 import { api, type Match, type ScoreTrendItem, type ScoreBandEffectiveness } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { ErrorState } from "@/components/states";
+import { VerifiedBadge } from "@/components/verified-badge";
+import { MatchmakingProgressModal } from "@/components/matchmaking-progress-modal";
 import {
   ResponsiveContainer,
   LineChart,
@@ -138,6 +140,7 @@ export function AdminDashboard() {
 
   async function runAll() { setRunning(true); try { await api.runAllMatching(); toast.success("Platform-wide matching complete"); await Promise.all([summary.refetch(), matches.refetch(), activity.refetch(), categories.refetch(), scoreTrend.refetch(), scoreEffectiveness.refetch()]); } catch (error) { toast.error(error instanceof Error ? error.message : "Matching failed"); } finally { setRunning(false); } }
   return <div className="page-wrap">
+    <MatchmakingProgressModal isOpen={running} title="Platform Matchmaking Engine" />
     <div className="mb-8 flex flex-wrap items-end justify-between gap-4"><div><span className="eyebrow">Platform overview</span><h1 className="page-title mt-3">Matching desk</h1><p className="mt-2 text-muted-foreground">A live view of marketplace health, quality, and activity.</p></div><Button onClick={runAll} disabled={running}><Play />{running ? "Running…" : "Run matching for everyone"}</Button></div>
     {summary.isError ? <ErrorState message={summary.error.message} /> : <div className="stat-grid">{[
       ["Clients", stats?.total_clients, "sage"], ["Suppliers", stats?.total_suppliers, "peach"], ["Matches", stats?.total_matches, "lavender"], ["Average score", `${Number(stats?.average_match_score ?? stats?.avg_match_score ?? 0).toFixed(0)}%`, "butter"]
@@ -321,6 +324,8 @@ export function AdminDashboard() {
 function MatchRow({ match, isExpanded, onToggle }: { match: Match; isExpanded: boolean; onToggle: () => void }) {
   const clientName = value(match.client_name ?? (match.client as Record<string, unknown> | undefined)?.["company_name"]);
   const supplierName = value(match.supplier_name ?? (match.supplier as Record<string, unknown> | undefined)?.["supplier_name"]);
+  const supplierStatus = String(match.supplier?.verification_status ?? (match.supplier as Record<string, unknown> | undefined)?.["verification_status"] ?? "");
+  const supplierCerts = String(match.supplier?.certifications ?? (match.supplier as Record<string, unknown> | undefined)?.["certifications"] ?? "");
   const matchCategory = value(match.category);
   const matchStatus = value(match.status, "Pending");
   const score = percent(match.match_score ?? match.score);
@@ -332,7 +337,12 @@ function MatchRow({ match, isExpanded, onToggle }: { match: Match; isExpanded: b
       <tr className="cursor-pointer transition-colors hover:bg-muted/50" onClick={onToggle}>
         <td className="w-10 text-center"><ChevronDown className={`inline-block size-4 transition-transform ${isExpanded ? "rotate-180" : ""}`} /></td>
         <td>{clientName}</td>
-        <td>{supplierName}</td>
+        <td>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span>{supplierName}</span>
+            <VerifiedBadge status={supplierStatus} certifications={supplierCerts} />
+          </div>
+        </td>
         <td>{matchCategory}</td>
         <td><span className={`score-mini ${tone === "score-high" ? "" : tone === "score-mid" ? "score-mini-mid" : "score-mini-low"}`}>{score}%</span></td>
         <td><span className={`status-badge ${matchStatus === "accepted" ? "status-accepted" : matchStatus === "rejected" ? "status-rejected" : ""}`}>{statusLabel(matchStatus)}</span></td>
@@ -357,7 +367,15 @@ function MatchRow({ match, isExpanded, onToggle }: { match: Match; isExpanded: b
                 </div>
               </div>
               <div>
-                <p className="mb-3 text-xs font-bold uppercase text-muted-foreground">Match reasoning</p>
+                {match.match_summary && (
+                  <div className="mb-3.5">
+                    <p className="mb-1.5 text-xs font-bold uppercase text-primary">AI Match Summary</p>
+                    <div className="rounded-lg border border-primary/25 bg-sage/20 p-3 text-xs italic leading-relaxed text-foreground dark:bg-card">
+                      "{match.match_summary}"
+                    </div>
+                  </div>
+                )}
+                <p className="mb-1 text-xs font-bold uppercase text-muted-foreground">Deterministic Criteria</p>
                 <p className="text-sm leading-6 text-muted-foreground">{value(match.match_reason ?? match.reason, "No detailed reasoning available.")}</p>
               </div>
             </div>

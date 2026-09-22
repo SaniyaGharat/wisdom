@@ -58,6 +58,16 @@ class SupplierBase(BaseModel):
         description="Optional extra specifications or supplier notes",
         examples=["Equipped with automated optical inspection (AOI) and X-ray testing."],
     )
+    verification_status: str = Field(
+        default="unverified",
+        description="Verification level: unverified, verified, or premium",
+        examples=["verified"],
+    )
+    certifications: Optional[str] = Field(
+        None,
+        description="Recognized supplier certifications (e.g. 'ISO 9001, AS9100D')",
+        examples=["ISO 9001, AS9100D"],
+    )
 
 
 class SupplierCreate(SupplierBase):
@@ -73,6 +83,8 @@ class SupplierUpdate(BaseModel):
     location: Optional[str] = Field(None, min_length=1, max_length=255, examples=["Dallas, TX, USA"])
     delivery_capability: Optional[str] = Field(None, min_length=1, max_length=255, examples=["ships in 7-10 days"])
     additional_notes: Optional[str] = Field(None, examples=["Expanded high-speed assembly line capacity"])
+    verification_status: Optional[str] = Field(None, examples=["verified"])
+    certifications: Optional[str] = Field(None, examples=["ISO 9001, AS9100D"])
 
 
 class SupplierResponse(SupplierBase):

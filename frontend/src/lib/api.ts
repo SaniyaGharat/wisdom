@@ -54,6 +54,7 @@ export type Match = {
   status?: string;
   match_reason?: string;
   reason?: string;
+  match_summary?: string;
   supplier_name?: string;
   client_name?: string;
   company_name?: string;

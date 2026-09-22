@@ -47,6 +47,9 @@ class Match(Base):
     # Human-readable justification explaining the match scoring
     match_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
+    # Narrative 2-sentence analyst briefing
+    match_summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
     # Status workflow: pending / notified / accepted / rejected
     status: Mapped[str] = mapped_column(
         String(50),
